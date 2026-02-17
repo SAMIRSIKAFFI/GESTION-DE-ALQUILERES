@@ -1,0 +1,1656 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Gestión de Alquileres</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .fade-in { animation: fadeIn 0.3s ease-in; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .slide-in { animation: slideIn 0.3s ease-out; }
+        @keyframes slideIn { from { transform: translateX(-100%); } to { transform: translateX(0); } }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useCallback } = React;
+
+        // API Configuration
+        const API_URL = 'http://localhost:8000/api/v1';
+
+        // API Helper
+        const api = {
+            async request(endpoint, options = {}) {
+                const token = localStorage.getItem('token');
+                const config = {
+                    ...options,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+                        ...options.headers,
+                    },
+                };
+                
+                try {
+                    const response = await fetch(`${API_URL}${endpoint}`, config);
+                    const data = await response.json();
+                    
+                    if (!response.ok) {
+                        throw new Error(data.detail || 'Error en la solicitud');
+                    }
+                    
+                    return data;
+                } catch (error) {
+                    throw error;
+                }
+            },
+            
+            auth: {
+                register: (data) => api.request('/auth/register', { method: 'POST', body: JSON.stringify(data) }),
+                login: (data) => api.request('/auth/login', { method: 'POST', body: JSON.stringify(data) }),
+            },
+            
+            propiedades: {
+                getAll: () => api.request('/propiedades'),
+                create: (data) => api.request('/propiedades', { method: 'POST', body: JSON.stringify(data) }),
+                get: (id) => api.request(`/propiedades/${id}`),
+            },
+            
+            inquilinos: {
+                getAll: () => api.request('/inquilinos'),
+                create: (data) => api.request('/inquilinos', { method: 'POST', body: JSON.stringify(data) }),
+            },
+            
+            contratos: {
+                getAll: () => api.request('/contratos'),
+                create: (data) => api.request('/contratos', { method: 'POST', body: JSON.stringify(data) }),
+            },
+            
+            pagos: {
+                create: (data) => api.request('/pagos', { method: 'POST', body: JSON.stringify(data) }),
+                registrar: (id, data) => api.request(`/pagos/${id}/registrar`, { method: 'POST', body: JSON.stringify(data) }),
+                getByContrato: (contratoId) => api.request(`/pagos/contrato/${contratoId}`),
+            },
+            
+            reportes: {
+                dashboard: (anio) => api.request(`/reportes/dashboard?anio=${anio}`),
+                morosidad: () => api.request('/reportes/morosidad'),
+            },
+        };
+
+        // Notification Component
+        function Notification({ message, type, onClose }) {
+            useEffect(() => {
+                const timer = setTimeout(onClose, 3000);
+                return () => clearTimeout(timer);
+            }, [onClose]);
+
+            const colors = {
+                success: 'bg-green-500',
+                error: 'bg-red-500',
+                info: 'bg-blue-500',
+            };
+
+            return (
+                <div className={`fixed top-4 right-4 ${colors[type]} text-white px-6 py-3 rounded-lg shadow-lg fade-in z-50`}>
+                    {message}
+                </div>
+            );
+        }
+
+        // Login Component
+        function Login({ onLogin }) {
+            const [isRegister, setIsRegister] = useState(false);
+            const [formData, setFormData] = useState({ email: '', password: '', full_name: '' });
+            const [loading, setLoading] = useState(false);
+            const [notification, setNotification] = useState(null);
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                setLoading(true);
+
+                try {
+                    const data = isRegister 
+                        ? await api.auth.register(formData)
+                        : await api.auth.login({ email: formData.email, password: formData.password });
+                    
+                    localStorage.setItem('token', data.access_token);
+                    localStorage.setItem('user', JSON.stringify(data.user));
+                    setNotification({ message: '¡Bienvenido!', type: 'success' });
+                    setTimeout(() => onLogin(data.user), 500);
+                } catch (error) {
+                    setNotification({ message: error.message, type: 'error' });
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            return (
+                <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-500 to-purple-600">
+                    {notification && <Notification {...notification} onClose={() => setNotification(null)} />}
+                    
+                    <div className="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md fade-in">
+                        <div className="text-center mb-8">
+                            <h1 className="text-3xl font-bold text-gray-800">🏢 Sistema de Alquileres</h1>
+                            <p className="text-gray-600 mt-2">{isRegister ? 'Crear cuenta' : 'Iniciar sesión'}</p>
+                        </div>
+
+                        <form onSubmit={handleSubmit} className="space-y-4">
+                            {isRegister && (
+                                <input
+                                    type="text"
+                                    placeholder="Nombre completo"
+                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    value={formData.full_name}
+                                    onChange={(e) => setFormData({...formData, full_name: e.target.value})}
+                                    required
+                                />
+                            )}
+                            
+                            <input
+                                type="email"
+                                placeholder="Email"
+                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                value={formData.email}
+                                onChange={(e) => setFormData({...formData, email: e.target.value})}
+                                required
+                            />
+                            
+                            <input
+                                type="password"
+                                placeholder="Contraseña"
+                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                value={formData.password}
+                                onChange={(e) => setFormData({...formData, password: e.target.value})}
+                                required
+                            />
+
+                            <button
+                                type="submit"
+                                disabled={loading}
+                                className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition disabled:opacity-50"
+                            >
+                                {loading ? 'Procesando...' : (isRegister ? 'Registrarse' : 'Ingresar')}
+                            </button>
+                        </form>
+
+                        <p className="text-center mt-4 text-gray-600">
+                            {isRegister ? '¿Ya tienes cuenta?' : '¿No tienes cuenta?'}
+                            <button
+                                onClick={() => setIsRegister(!isRegister)}
+                                className="text-blue-600 font-semibold ml-2 hover:underline"
+                            >
+                                {isRegister ? 'Inicia sesión' : 'Regístrate'}
+                            </button>
+                        </p>
+                    </div>
+                </div>
+            );
+        }
+
+        // Dashboard Component
+        function Dashboard({ user }) {
+            const [activeTab, setActiveTab] = useState('dashboard');
+            const [stats, setStats] = useState(null);
+            const [propiedades, setPropiedades] = useState([]);
+            const [inquilinos, setInquilinos] = useState([]);
+            const [contratos, setContratos] = useState([]);
+            const [notification, setNotification] = useState(null);
+            const [showModal, setShowModal] = useState(null);
+
+            useEffect(() => {
+                loadDashboardData();
+            }, []);
+
+            const loadDashboardData = async () => {
+                try {
+                    const [statsData, propData, inquData, contrData] = await Promise.all([
+                        api.reportes.dashboard(new Date().getFullYear()),
+                        api.propiedades.getAll(),
+                        api.inquilinos.getAll(),
+                        api.contratos.getAll(),
+                    ]);
+                    
+                    setStats(statsData);
+                    setPropiedades(propData);
+                    setInquilinos(inquData);
+                    setContratos(contrData);
+                } catch (error) {
+                    console.error('Error loading data:', error);
+                }
+            };
+
+            const logout = () => {
+                localStorage.removeItem('token');
+                localStorage.removeItem('user');
+                window.location.reload();
+            };
+
+            return (
+                <div className="min-h-screen bg-gray-50">
+                    {notification && <Notification {...notification} onClose={() => setNotification(null)} />}
+                    
+                    {/* Header */}
+                    <header className="bg-white shadow-sm">
+                        <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
+                            <h1 className="text-2xl font-bold text-gray-800">🏢 Gestión de Alquileres</h1>
+                            <div className="flex items-center gap-4">
+                                <span className="text-gray-600">Hola, {user.full_name}</span>
+                                <button onClick={logout} className="text-red-600 hover:text-red-800">
+                                    Salir
+                                </button>
+                            </div>
+                        </div>
+                    </header>
+
+                    {/* Navigation */}
+                    <nav className="bg-white border-b">
+                        <div className="max-w-7xl mx-auto px-4">
+                            <div className="flex space-x-8">
+                                {[
+                                    { id: 'dashboard', label: '📊 Dashboard', icon: '📊' },
+                                    { id: 'propiedades', label: '🏠 Propiedades', icon: '🏠' },
+                                    { id: 'inquilinos', label: '👤 Inquilinos', icon: '👤' },
+                                    { id: 'contratos', label: '📄 Contratos', icon: '📄' },
+                                    { id: 'pagos', label: '💰 Pagos', icon: '💰' },
+                                    { id: 'reportes', label: '📈 Reportes', icon: '📈' },
+                                ].map(tab => (
+                                    <button
+                                        key={tab.id}
+                                        onClick={() => setActiveTab(tab.id)}
+                                        className={`py-4 border-b-2 transition ${
+                                            activeTab === tab.id
+                                                ? 'border-blue-600 text-blue-600 font-semibold'
+                                                : 'border-transparent text-gray-600 hover:text-gray-800'
+                                        }`}
+                                    >
+                                        {tab.label}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    </nav>
+
+                    {/* Content */}
+                    <main className="max-w-7xl mx-auto px-4 py-8">
+                        {activeTab === 'dashboard' && (
+                            <DashboardView stats={stats} propiedades={propiedades} contratos={contratos} />
+                        )}
+                        {activeTab === 'propiedades' && (
+                            <PropiedadesView 
+                                propiedades={propiedades} 
+                                onRefresh={loadDashboardData}
+                                setNotification={setNotification}
+                            />
+                        )}
+                        {activeTab === 'inquilinos' && (
+                            <InquilinosView 
+                                inquilinos={inquilinos} 
+                                onRefresh={loadDashboardData}
+                                setNotification={setNotification}
+                            />
+                        )}
+                        {activeTab === 'contratos' && (
+                            <ContratosView 
+                                contratos={contratos}
+                                propiedades={propiedades}
+                                inquilinos={inquilinos}
+                                onRefresh={loadDashboardData}
+                                setNotification={setNotification}
+                            />
+                        )}
+                        {activeTab === 'pagos' && (
+                            <PagosView 
+                                contratos={contratos}
+                                setNotification={setNotification}
+                            />
+                        )}
+                        {activeTab === 'reportes' && (
+                            <ReportesView stats={stats} />
+                        )}
+                    </main>
+                </div>
+            );
+        }
+
+        // Dashboard View
+        function DashboardView({ stats, propiedades, contratos }) {
+            if (!stats) return <div className="text-center py-8">Cargando...</div>;
+
+            return (
+                <div className="space-y-6 fade-in">
+                    {/* Stats Cards */}
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                        <div className="bg-white p-6 rounded-lg shadow">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-gray-600 text-sm">Propiedades</p>
+                                    <p className="text-3xl font-bold text-gray-800">{stats.resumen.total_propiedades}</p>
+                                </div>
+                                <div className="text-4xl">🏠</div>
+                            </div>
+                        </div>
+
+                        <div className="bg-white p-6 rounded-lg shadow">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-gray-600 text-sm">Ingresos {stats.anio}</p>
+                                    <p className="text-3xl font-bold text-green-600">Bs. {stats.resumen.ingresos_anio.toLocaleString()}</p>
+                                </div>
+                                <div className="text-4xl">💰</div>
+                            </div>
+                        </div>
+
+                        <div className="bg-white p-6 rounded-lg shadow">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-gray-600 text-sm">Mora Acumulada</p>
+                                    <p className="text-3xl font-bold text-red-600">Bs. {stats.resumen.mora_acumulada.toLocaleString()}</p>
+                                </div>
+                                <div className="text-4xl">⚠️</div>
+                            </div>
+                        </div>
+
+                        <div className="bg-white p-6 rounded-lg shadow">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-gray-600 text-sm">Pagos Pendientes</p>
+                                    <p className="text-3xl font-bold text-orange-600">{stats.resumen.pagos_pendientes}</p>
+                                </div>
+                                <div className="text-4xl">📋</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Recent Properties */}
+                    <div className="bg-white p-6 rounded-lg shadow">
+                        <h3 className="text-xl font-bold text-gray-800 mb-4">Propiedades Recientes</h3>
+                        <div className="overflow-x-auto">
+                            <table className="w-full">
+                                <thead className="bg-gray-50">
+                                    <tr>
+                                        <th className="px-4 py-2 text-left text-sm font-semibold text-gray-600">Dirección</th>
+                                        <th className="px-4 py-2 text-left text-sm font-semibold text-gray-600">Tipo</th>
+                                        <th className="px-4 py-2 text-left text-sm font-semibold text-gray-600">Canon</th>
+                                        <th className="px-4 py-2 text-left text-sm font-semibold text-gray-600">Estado</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {propiedades.slice(0, 5).map(prop => (
+                                        <tr key={prop.id} className="border-t">
+                                            <td className="px-4 py-3 text-sm">{prop.direccion}</td>
+                                            <td className="px-4 py-3 text-sm">
+                                                <span className={`px-2 py-1 rounded-full text-xs ${
+                                                    prop.tipo === 'copropiedad' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'
+                                                }`}>
+                                                    {prop.tipo}
+                                                </span>
+                                            </td>
+                                            <td className="px-4 py-3 text-sm font-semibold">Bs. {prop.canon_base.toLocaleString()}</td>
+                                            <td className="px-4 py-3 text-sm">
+                                                <span className={`px-2 py-1 rounded-full text-xs ${
+                                                    prop.estado === 'disponible' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                                                }`}>
+                                                    {prop.estado}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // Propiedades View
+        function PropiedadesView({ propiedades, onRefresh, setNotification }) {
+            const [showModal, setShowModal] = useState(false);
+            const [formData, setFormData] = useState({
+                direccion: '',
+                ciudad: 'La Paz',
+                departamento: 'La Paz',
+                zona: '',
+                tipo: 'propia',
+                tipo_inmueble: 'departamento',
+                superficie: '',
+                dormitorios: '',
+                banos: '',
+                descripcion: '',
+                canon_base: '',
+                moneda: 'BOB',
+                copropietarios: []
+            });
+            const [copropietario, setCopropietario] = useState({
+                nombre: '',
+                ci: '',
+                telefono: '',
+                email: '',
+                porcentaje_participacion: '',
+                cuenta_bancaria: '',
+                banco: '',
+                tipo_cuenta: 'ahorro'
+            });
+
+            const agregarCopropietario = () => {
+                if (!copropietario.nombre || !copropietario.porcentaje_participacion) {
+                    setNotification({ message: 'Complete los datos del copropietario', type: 'error' });
+                    return;
+                }
+
+                const totalActual = formData.copropietarios.reduce((sum, c) => sum + parseFloat(c.porcentaje_participacion), 0);
+                const nuevoTotal = totalActual + parseFloat(copropietario.porcentaje_participacion);
+
+                if (nuevoTotal > 100) {
+                    setNotification({ message: 'El total de porcentajes no puede superar 100%', type: 'error' });
+                    return;
+                }
+
+                setFormData({
+                    ...formData,
+                    copropietarios: [...formData.copropietarios, copropietario]
+                });
+                setCopropietario({
+                    nombre: '',
+                    ci: '',
+                    telefono: '',
+                    email: '',
+                    porcentaje_participacion: '',
+                    cuenta_bancaria: '',
+                    banco: '',
+                    tipo_cuenta: 'ahorro'
+                });
+                setNotification({ message: 'Copropietario agregado', type: 'success' });
+            };
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                
+                try {
+                    if (formData.tipo === 'copropiedad' && formData.copropietarios.length === 0) {
+                        setNotification({ message: 'Debe agregar al menos un copropietario', type: 'error' });
+                        return;
+                    }
+
+                    const totalPorcentaje = formData.copropietarios.reduce((sum, c) => sum + parseFloat(c.porcentaje_participacion), 0);
+                    if (formData.tipo === 'copropiedad' && Math.abs(totalPorcentaje - 100) > 0.01) {
+                        setNotification({ message: 'Los porcentajes deben sumar 100%', type: 'error' });
+                        return;
+                    }
+
+                    await api.propiedades.create({
+                        ...formData,
+                        superficie: parseFloat(formData.superficie),
+                        dormitorios: parseInt(formData.dormitorios),
+                        banos: parseInt(formData.banos),
+                        canon_base: parseFloat(formData.canon_base),
+                    });
+
+                    setNotification({ message: '¡Propiedad creada exitosamente!', type: 'success' });
+                    setShowModal(false);
+                    onRefresh();
+                    
+                    // Reset form
+                    setFormData({
+                        direccion: '',
+                        ciudad: 'La Paz',
+                        departamento: 'La Paz',
+                        zona: '',
+                        tipo: 'propia',
+                        tipo_inmueble: 'departamento',
+                        superficie: '',
+                        dormitorios: '',
+                        banos: '',
+                        descripcion: '',
+                        canon_base: '',
+                        moneda: 'BOB',
+                        copropietarios: []
+                    });
+                } catch (error) {
+                    setNotification({ message: error.message, type: 'error' });
+                }
+            };
+
+            return (
+                <div className="fade-in">
+                    <div className="flex justify-between items-center mb-6">
+                        <h2 className="text-2xl font-bold text-gray-800">Propiedades</h2>
+                        <button
+                            onClick={() => setShowModal(true)}
+                            className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition"
+                        >
+                            + Nueva Propiedad
+                        </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {propiedades.map(prop => (
+                            <div key={prop.id} className="bg-white p-6 rounded-lg shadow hover:shadow-lg transition">
+                                <div className="flex justify-between items-start mb-4">
+                                    <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                                        prop.tipo === 'copropiedad' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'
+                                    }`}>
+                                        {prop.tipo}
+                                    </span>
+                                    <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                                        prop.estado === 'disponible' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                                    }`}>
+                                        {prop.estado}
+                                    </span>
+                                </div>
+                                <h3 className="font-bold text-gray-800 mb-2">{prop.direccion}</h3>
+                                <p className="text-sm text-gray-600 mb-4">{prop.ciudad}</p>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-2xl font-bold text-blue-600">Bs. {prop.canon_base.toLocaleString()}</span>
+                                    {prop.numero_copropietarios > 0 && (
+                                        <span className="text-sm text-gray-600">{prop.numero_copropietarios} coprop.</span>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Modal */}
+                    {showModal && (
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                            <div className="bg-white rounded-lg p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto fade-in">
+                                <h3 className="text-2xl font-bold mb-4">Nueva Propiedad</h3>
+                                
+                                <form onSubmit={handleSubmit} className="space-y-4">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div className="md:col-span-2">
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Dirección *</label>
+                                            <input
+                                                type="text"
+                                                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                                                value={formData.direccion}
+                                                onChange={(e) => setFormData({...formData, direccion: e.target.value})}
+                                                required
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Ciudad *</label>
+                                            <input
+                                                type="text"
+                                                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                                                value={formData.ciudad}
+                                                onChange={(e) => setFormData({...formData, ciudad: e.target.value})}
+                                                required
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Zona</label>
+                                            <input
+                                                type="text"
+                                                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                                                value={formData.zona}
+                                                onChange={(e) => setFormData({...formData, zona: e.target.value})}
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de Propiedad *</label>
+                                            <select
+                                                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                                                value={formData.tipo}
+                                                onChange={(e) => setFormData({...formData, tipo: e.target.value})}
+                                                required
+                                            >
+                                                <option value="propia">Propia</option>
+                                                <option value="copropiedad">Copropiedad</option>
+                                            </select>
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de Inmueble</label>
+                                            <select
+                                                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                                                value={formData.tipo_inmueble}
+                                                onChange={(e) => setFormData({...formData, tipo_inmueble: e.target.value})}
+                                            >
+                                                <option value="departamento">Departamento</option>
+                                                <option value="casa">Casa</option>
+                                                <option value="oficina">Oficina</option>
+                                                <option value="local">Local Comercial</option>
+                                            </select>
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Superficie (m²)</label>
+                                            <input
+                                                type="number"
+                                                step="0.01"
+                                                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                                                value={formData.superficie}
+                                                onChange={(e) => setFormData({...formData, superficie: e.target.value})}
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Dormitorios</label>
+                                            <input
+                                                type="number"
+                                                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                                                value={formData.dormitorios}
+                                                onChange={(e) => setFormData({...formData, dormitorios: e.target.value})}
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Baños</label>
+                                            <input
+                                                type="number"
+                                                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                                                value={formData.banos}
+                                                onChange={(e) => setFormData({...formData, banos: e.target.value})}
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Canon Base (Bs.) *</label>
+                                            <input
+                                                type="number"
+                                                step="0.01"
+                                                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                                                value={formData.canon_base}
+                                                onChange={(e) => setFormData({...formData, canon_base: e.target.value})}
+                                                required
+                                            />
+                                        </div>
+
+                                        <div className="md:col-span-2">
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
+                                            <textarea
+                                                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                                                rows="3"
+                                                value={formData.descripcion}
+                                                onChange={(e) => setFormData({...formData, descripcion: e.target.value})}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Copropietarios Section */}
+                                    {formData.tipo === 'copropiedad' && (
+                                        <div className="border-t pt-4">
+                                            <h4 className="font-bold text-lg mb-4">Copropietarios</h4>
+                                            
+                                            {formData.copropietarios.length > 0 && (
+                                                <div className="mb-4 p-4 bg-gray-50 rounded-lg">
+                                                    {formData.copropietarios.map((c, i) => (
+                                                        <div key={i} className="flex justify-between items-center mb-2">
+                                                            <span>{c.nombre} - {c.porcentaje_participacion}%</span>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setFormData({
+                                                                    ...formData,
+                                                                    copropietarios: formData.copropietarios.filter((_, idx) => idx !== i)
+                                                                })}
+                                                                className="text-red-600 hover:text-red-800"
+                                                            >
+                                                                ✕
+                                                            </button>
+                                                        </div>
+                                                    ))}
+                                                    <p className="text-sm text-gray-600 mt-2">
+                                                        Total: {formData.copropietarios.reduce((sum, c) => sum + parseFloat(c.porcentaje_participacion), 0)}%
+                                                    </p>
+                                                </div>
+                                            )}
+
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <input
+                                                    type="text"
+                                                    placeholder="Nombre completo *"
+                                                    className="px-4 py-2 border rounded-lg"
+                                                    value={copropietario.nombre}
+                                                    onChange={(e) => setCopropietario({...copropietario, nombre: e.target.value})}
+                                                />
+                                                <input
+                                                    type="text"
+                                                    placeholder="CI"
+                                                    className="px-4 py-2 border rounded-lg"
+                                                    value={copropietario.ci}
+                                                    onChange={(e) => setCopropietario({...copropietario, ci: e.target.value})}
+                                                />
+                                                <input
+                                                    type="text"
+                                                    placeholder="Teléfono"
+                                                    className="px-4 py-2 border rounded-lg"
+                                                    value={copropietario.telefono}
+                                                    onChange={(e) => setCopropietario({...copropietario, telefono: e.target.value})}
+                                                />
+                                                <input
+                                                    type="email"
+                                                    placeholder="Email"
+                                                    className="px-4 py-2 border rounded-lg"
+                                                    value={copropietario.email}
+                                                    onChange={(e) => setCopropietario({...copropietario, email: e.target.value})}
+                                                />
+                                                <input
+                                                    type="number"
+                                                    step="0.01"
+                                                    placeholder="% Participación *"
+                                                    className="px-4 py-2 border rounded-lg"
+                                                    value={copropietario.porcentaje_participacion}
+                                                    onChange={(e) => setCopropietario({...copropietario, porcentaje_participacion: e.target.value})}
+                                                />
+                                                <input
+                                                    type="text"
+                                                    placeholder="Cuenta bancaria"
+                                                    className="px-4 py-2 border rounded-lg"
+                                                    value={copropietario.cuenta_bancaria}
+                                                    onChange={(e) => setCopropietario({...copropietario, cuenta_bancaria: e.target.value})}
+                                                />
+                                                <input
+                                                    type="text"
+                                                    placeholder="Banco"
+                                                    className="px-4 py-2 border rounded-lg"
+                                                    value={copropietario.banco}
+                                                    onChange={(e) => setCopropietario({...copropietario, banco: e.target.value})}
+                                                />
+                                                <select
+                                                    className="px-4 py-2 border rounded-lg"
+                                                    value={copropietario.tipo_cuenta}
+                                                    onChange={(e) => setCopropietario({...copropietario, tipo_cuenta: e.target.value})}
+                                                >
+                                                    <option value="ahorro">Ahorro</option>
+                                                    <option value="corriente">Corriente</option>
+                                                </select>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={agregarCopropietario}
+                                                className="mt-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                                            >
+                                                + Agregar Copropietario
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    <div className="flex gap-4 pt-4">
+                                        <button
+                                            type="submit"
+                                            className="flex-1 bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700"
+                                        >
+                                            Crear Propiedad
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowModal(false)}
+                                            className="flex-1 bg-gray-300 text-gray-700 py-3 rounded-lg font-semibold hover:bg-gray-400"
+                                        >
+                                            Cancelar
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        // Inquilinos View
+        function InquilinosView({ inquilinos, onRefresh, setNotification }) {
+            const [showModal, setShowModal] = useState(false);
+            const [formData, setFormData] = useState({
+                nombre_completo: '',
+                ci: '',
+                telefono: '',
+                email: '',
+                direccion_actual: '',
+                ocupacion: ''
+            });
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                try {
+                    await api.inquilinos.create(formData);
+                    setNotification({ message: '¡Inquilino creado exitosamente!', type: 'success' });
+                    setShowModal(false);
+                    onRefresh();
+                    setFormData({
+                        nombre_completo: '',
+                        ci: '',
+                        telefono: '',
+                        email: '',
+                        direccion_actual: '',
+                        ocupacion: ''
+                    });
+                } catch (error) {
+                    setNotification({ message: error.message, type: 'error' });
+                }
+            };
+
+            return (
+                <div className="fade-in">
+                    <div className="flex justify-between items-center mb-6">
+                        <h2 className="text-2xl font-bold text-gray-800">Inquilinos</h2>
+                        <button
+                            onClick={() => setShowModal(true)}
+                            className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition"
+                        >
+                            + Nuevo Inquilino
+                        </button>
+                    </div>
+
+                    <div className="bg-white rounded-lg shadow overflow-hidden">
+                        <table className="w-full">
+                            <thead className="bg-gray-50">
+                                <tr>
+                                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Nombre</th>
+                                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">CI</th>
+                                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Teléfono</th>
+                                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Email</th>
+                                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Estado</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {inquilinos.map(inq => (
+                                    <tr key={inq.id} className="border-t hover:bg-gray-50">
+                                        <td className="px-6 py-4 text-sm font-medium">{inq.nombre_completo}</td>
+                                        <td className="px-6 py-4 text-sm">{inq.ci}</td>
+                                        <td className="px-6 py-4 text-sm">{inq.telefono}</td>
+                                        <td className="px-6 py-4 text-sm">{inq.email}</td>
+                                        <td className="px-6 py-4 text-sm">
+                                            <span className="px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800">
+                                                {inq.estado}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {/* Modal */}
+                    {showModal && (
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                            <div className="bg-white rounded-lg p-6 max-w-2xl w-full fade-in">
+                                <h3 className="text-2xl font-bold mb-4">Nuevo Inquilino</h3>
+                                
+                                <form onSubmit={handleSubmit} className="space-y-4">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div className="md:col-span-2">
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Nombre Completo *</label>
+                                            <input
+                                                type="text"
+                                                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                                                value={formData.nombre_completo}
+                                                onChange={(e) => setFormData({...formData, nombre_completo: e.target.value})}
+                                                required
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">CI *</label>
+                                            <input
+                                                type="text"
+                                                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                                                value={formData.ci}
+                                                onChange={(e) => setFormData({...formData, ci: e.target.value})}
+                                                required
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>
+                                            <input
+                                                type="text"
+                                                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                                                value={formData.telefono}
+                                                onChange={(e) => setFormData({...formData, telefono: e.target.value})}
+                                            />
+                                        </div>
+
+                                        <div className="md:col-span-2">
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                                            <input
+                                                type="email"
+                                                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                                                value={formData.email}
+                                                onChange={(e) => setFormData({...formData, email: e.target.value})}
+                                            />
+                                        </div>
+
+                                        <div className="md:col-span-2">
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Dirección Actual</label>
+                                            <input
+                                                type="text"
+                                                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                                                value={formData.direccion_actual}
+                                                onChange={(e) => setFormData({...formData, direccion_actual: e.target.value})}
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Ocupación</label>
+                                            <input
+                                                type="text"
+                                                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                                                value={formData.ocupacion}
+                                                onChange={(e) => setFormData({...formData, ocupacion: e.target.value})}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="flex gap-4 pt-4">
+                                        <button
+                                            type="submit"
+                                            className="flex-1 bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700"
+                                        >
+                                            Crear Inquilino
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowModal(false)}
+                                            className="flex-1 bg-gray-300 text-gray-700 py-3 rounded-lg font-semibold hover:bg-gray-400"
+                                        >
+                                            Cancelar
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        // Contratos View (Simplified)
+        function ContratosView({ contratos, propiedades, inquilinos, onRefresh, setNotification }) {
+            const [showModal, setShowModal] = useState(false);
+            const [formData, setFormData] = useState({
+                numero_contrato: '',
+                propiedad_id: '',
+                inquilino_id: '',
+                fecha_inicio: '',
+                fecha_fin: '',
+                canon_mensual: '',
+                garantia: '',
+                incremento_anual: '5',
+                dia_pago: '5',
+                tasa_mora_diaria: '0.5'
+            });
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                try {
+                    await api.contratos.create({
+                        ...formData,
+                        propiedad_id: parseInt(formData.propiedad_id),
+                        inquilino_id: parseInt(formData.inquilino_id),
+                        canon_mensual: parseFloat(formData.canon_mensual),
+                        garantia: parseFloat(formData.garantia),
+                        incremento_anual: parseFloat(formData.incremento_anual),
+                        dia_pago: parseInt(formData.dia_pago),
+                        tasa_mora_diaria: parseFloat(formData.tasa_mora_diaria),
+                    });
+
+                    setNotification({ message: '¡Contrato creado exitosamente!', type: 'success' });
+                    setShowModal(false);
+                    onRefresh();
+                } catch (error) {
+                    setNotification({ message: error.message, type: 'error' });
+                }
+            };
+
+            return (
+                <div className="fade-in">
+                    <div className="flex justify-between items-center mb-6">
+                        <h2 className="text-2xl font-bold text-gray-800">Contratos</h2>
+                        <button
+                            onClick={() => setShowModal(true)}
+                            className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition"
+                        >
+                            + Nuevo Contrato
+                        </button>
+                    </div>
+
+                    <div className="bg-white rounded-lg shadow overflow-hidden">
+                        <table className="w-full">
+                            <thead className="bg-gray-50">
+                                <tr>
+                                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Número</th>
+                                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Propiedad</th>
+                                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Inquilino</th>
+                                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Canon</th>
+                                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Estado</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {contratos.map(cont => (
+                                    <tr key={cont.id} className="border-t hover:bg-gray-50">
+                                        <td className="px-6 py-4 text-sm font-medium">{cont.numero_contrato}</td>
+                                        <td className="px-6 py-4 text-sm">{cont.propiedad_id}</td>
+                                        <td className="px-6 py-4 text-sm">{cont.inquilino_id}</td>
+                                        <td className="px-6 py-4 text-sm font-semibold">Bs. {cont.canon_mensual?.toLocaleString()}</td>
+                                        <td className="px-6 py-4 text-sm">
+                                            <span className="px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800">
+                                                {cont.estado}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {/* Modal */}
+                    {showModal && (
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                            <div className="bg-white rounded-lg p-6 max-w-3xl w-full max-h-[90vh] overflow-y-auto fade-in">
+                                <h3 className="text-2xl font-bold mb-4">Nuevo Contrato</h3>
+                                
+                                <form onSubmit={handleSubmit} className="space-y-4">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Número de Contrato *</label>
+                                            <input
+                                                type="text"
+                                                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                                                value={formData.numero_contrato}
+                                                onChange={(e) => setFormData({...formData, numero_contrato: e.target.value})}
+                                                placeholder="CTR-2026-001"
+                                                required
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Propiedad *</label>
+                                            <select
+                                                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                                                value={formData.propiedad_id}
+                                                onChange={(e) => setFormData({...formData, propiedad_id: e.target.value})}
+                                                required
+                                            >
+                                                <option value="">Seleccione...</option>
+                                                {propiedades.map(prop => (
+                                                    <option key={prop.id} value={prop.id}>
+                                                        {prop.direccion} - Bs. {prop.canon_base}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Inquilino *</label>
+                                            <select
+                                                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                                                value={formData.inquilino_id}
+                                                onChange={(e) => setFormData({...formData, inquilino_id: e.target.value})}
+                                                required
+                                            >
+                                                <option value="">Seleccione...</option>
+                                                {inquilinos.map(inq => (
+                                                    <option key={inq.id} value={inq.id}>
+                                                        {inq.nombre_completo}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Fecha Inicio *</label>
+                                            <input
+                                                type="date"
+                                                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                                                value={formData.fecha_inicio}
+                                                onChange={(e) => setFormData({...formData, fecha_inicio: e.target.value})}
+                                                required
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Fecha Fin *</label>
+                                            <input
+                                                type="date"
+                                                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                                                value={formData.fecha_fin}
+                                                onChange={(e) => setFormData({...formData, fecha_fin: e.target.value})}
+                                                required
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Canon Mensual (Bs.) *</label>
+                                            <input
+                                                type="number"
+                                                step="0.01"
+                                                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                                                value={formData.canon_mensual}
+                                                onChange={(e) => setFormData({...formData, canon_mensual: e.target.value})}
+                                                required
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Garantía (Bs.) *</label>
+                                            <input
+                                                type="number"
+                                                step="0.01"
+                                                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                                                value={formData.garantia}
+                                                onChange={(e) => setFormData({...formData, garantia: e.target.value})}
+                                                required
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Día de Pago</label>
+                                            <input
+                                                type="number"
+                                                min="1"
+                                                max="31"
+                                                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                                                value={formData.dia_pago}
+                                                onChange={(e) => setFormData({...formData, dia_pago: e.target.value})}
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Tasa Mora Diaria (%)</label>
+                                            <input
+                                                type="number"
+                                                step="0.1"
+                                                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                                                value={formData.tasa_mora_diaria}
+                                                onChange={(e) => setFormData({...formData, tasa_mora_diaria: e.target.value})}
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Incremento Anual (%)</label>
+                                            <input
+                                                type="number"
+                                                step="0.1"
+                                                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                                                value={formData.incremento_anual}
+                                                onChange={(e) => setFormData({...formData, incremento_anual: e.target.value})}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="flex gap-4 pt-4">
+                                        <button
+                                            type="submit"
+                                            className="flex-1 bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700"
+                                        >
+                                            Crear Contrato
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowModal(false)}
+                                            className="flex-1 bg-gray-300 text-gray-700 py-3 rounded-lg font-semibold hover:bg-gray-400"
+                                        >
+                                            Cancelar
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        // Pagos View (Continued in next part due to character limit...)
+        function PagosView({ contratos, setNotification }) {
+            const [selectedContrato, setSelectedContrato] = useState('');
+            const [pagos, setPagos] = useState([]);
+            const [showCreateModal, setShowCreateModal] = useState(false);
+            const [showRegisterModal, setShowRegisterModal] = useState(false);
+            const [selectedPago, setSelectedPago] = useState(null);
+            const [distribucion, setDistribucion] = useState(null);
+
+            const [createFormData, setCreateFormData] = useState({
+                periodo: '',
+                fecha_vencimiento: '',
+                monto_esperado: ''
+            });
+
+            const [registerFormData, setRegisterFormData] = useState({
+                monto_pagado: '',
+                fecha_pago: '',
+                forma_pago: 'transferencia',
+                numero_comprobante: '',
+                nota: ''
+            });
+
+            useEffect(() => {
+                if (selectedContrato) {
+                    loadPagos();
+                }
+            }, [selectedContrato]);
+
+            const loadPagos = async () => {
+                try {
+                    const data = await api.pagos.getByContrato(selectedContrato);
+                    setPagos(data);
+                } catch (error) {
+                    console.error('Error loading pagos:', error);
+                }
+            };
+
+            const handleCreatePago = async (e) => {
+                e.preventDefault();
+                try {
+                    const [anio, mes] = createFormData.periodo.split('-');
+                    await api.pagos.create({
+                        contrato_id: parseInt(selectedContrato),
+                        periodo: createFormData.periodo,
+                        anio: parseInt(anio),
+                        mes: parseInt(mes),
+                        fecha_vencimiento: createFormData.fecha_vencimiento,
+                        monto_esperado: parseFloat(createFormData.monto_esperado)
+                    });
+
+                    setNotification({ message: '¡Pago creado exitosamente!', type: 'success' });
+                    setShowCreateModal(false);
+                    loadPagos();
+                    setCreateFormData({ periodo: '', fecha_vencimiento: '', monto_esperado: '' });
+                } catch (error) {
+                    setNotification({ message: error.message, type: 'error' });
+                }
+            };
+
+            const handleRegistrarPago = async (e) => {
+                e.preventDefault();
+                try {
+                    const result = await api.pagos.registrar(selectedPago.id, {
+                        monto_pagado: parseFloat(registerFormData.monto_pagado),
+                        fecha_pago: registerFormData.fecha_pago,
+                        forma_pago: registerFormData.forma_pago,
+                        numero_comprobante: registerFormData.numero_comprobante,
+                        nota: registerFormData.nota
+                    });
+
+                    setDistribucion(result);
+                    setNotification({ message: '¡Pago registrado exitosamente!', type: 'success' });
+                    loadPagos();
+                } catch (error) {
+                    setNotification({ message: error.message, type: 'error' });
+                }
+            };
+
+            return (
+                <div className="fade-in">
+                    <div className="flex justify-between items-center mb-6">
+                        <h2 className="text-2xl font-bold text-gray-800">Registro de Pagos</h2>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                        <div className="md:col-span-2">
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Seleccionar Contrato</label>
+                            <select
+                                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                                value={selectedContrato}
+                                onChange={(e) => setSelectedContrato(e.target.value)}
+                            >
+                                <option value="">-- Seleccione un contrato --</option>
+                                {contratos.map(cont => (
+                                    <option key={cont.id} value={cont.id}>
+                                        {cont.numero_contrato} - Canon: Bs. {cont.canon_mensual?.toLocaleString()}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                        
+                        {selectedContrato && (
+                            <button
+                                onClick={() => setShowCreateModal(true)}
+                                className="md:self-end bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition"
+                            >
+                                + Crear Pago Pendiente
+                            </button>
+                        )}
+                    </div>
+
+                    {selectedContrato && pagos.length > 0 && (
+                        <div className="bg-white rounded-lg shadow overflow-hidden">
+                            <table className="w-full">
+                                <thead className="bg-gray-50">
+                                    <tr>
+                                        <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Periodo</th>
+                                        <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Vencimiento</th>
+                                        <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Monto</th>
+                                        <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Pagado</th>
+                                        <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Mora</th>
+                                        <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Estado</th>
+                                        <th className="px-6 py-3 text-left text-sm font-semibold text-gray-600">Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {pagos.map(pago => (
+                                        <tr key={pago.id} className="border-t hover:bg-gray-50">
+                                            <td className="px-6 py-4 text-sm font-medium">{pago.periodo}</td>
+                                            <td className="px-6 py-4 text-sm">{pago.fecha_vencimiento}</td>
+                                            <td className="px-6 py-4 text-sm font-semibold">Bs. {pago.monto_esperado?.toLocaleString()}</td>
+                                            <td className="px-6 py-4 text-sm font-semibold text-green-600">Bs. {pago.monto_pagado?.toLocaleString()}</td>
+                                            <td className="px-6 py-4 text-sm font-semibold text-red-600">Bs. {pago.mora_calculada?.toLocaleString()}</td>
+                                            <td className="px-6 py-4 text-sm">
+                                                <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                                                    pago.estado === 'pagado' ? 'bg-green-100 text-green-800' :
+                                                    pago.estado === 'vencido' ? 'bg-red-100 text-red-800' :
+                                                    'bg-yellow-100 text-yellow-800'
+                                                }`}>
+                                                    {pago.estado}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4 text-sm">
+                                                {pago.estado !== 'pagado' && (
+                                                    <button
+                                                        onClick={() => {
+                                                            setSelectedPago(pago);
+                                                            setRegisterFormData({
+                                                                monto_pagado: pago.monto_esperado.toString(),
+                                                                fecha_pago: new Date().toISOString().split('T')[0],
+                                                                forma_pago: 'transferencia',
+                                                                numero_comprobante: '',
+                                                                nota: ''
+                                                            });
+                                                            setShowRegisterModal(true);
+                                                            setDistribucion(null);
+                                                        }}
+                                                        className="text-blue-600 hover:text-blue-800 font-semibold"
+                                                    >
+                                                        Registrar Pago
+                                                    </button>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+
+                    {/* Create Pago Modal */}
+                    {showCreateModal && (
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                            <div className="bg-white rounded-lg p-6 max-w-md w-full fade-in">
+                                <h3 className="text-2xl font-bold mb-4">Crear Pago Pendiente</h3>
+                                
+                                <form onSubmit={handleCreatePago} className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Periodo (YYYY-MM) *</label>
+                                        <input
+                                            type="text"
+                                            placeholder="2026-02"
+                                            className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                                            value={createFormData.periodo}
+                                            onChange={(e) => setCreateFormData({...createFormData, periodo: e.target.value})}
+                                            required
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Fecha Vencimiento *</label>
+                                        <input
+                                            type="date"
+                                            className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                                            value={createFormData.fecha_vencimiento}
+                                            onChange={(e) => setCreateFormData({...createFormData, fecha_vencimiento: e.target.value})}
+                                            required
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Monto Esperado (Bs.) *</label>
+                                        <input
+                                            type="number"
+                                            step="0.01"
+                                            className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                                            value={createFormData.monto_esperado}
+                                            onChange={(e) => setCreateFormData({...createFormData, monto_esperado: e.target.value})}
+                                            required
+                                        />
+                                    </div>
+
+                                    <div className="flex gap-4 pt-4">
+                                        <button
+                                            type="submit"
+                                            className="flex-1 bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700"
+                                        >
+                                            Crear
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowCreateModal(false)}
+                                            className="flex-1 bg-gray-300 text-gray-700 py-3 rounded-lg font-semibold hover:bg-gray-400"
+                                        >
+                                            Cancelar
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Register Pago Modal */}
+                    {showRegisterModal && (
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                            <div className="bg-white rounded-lg p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto fade-in">
+                                <h3 className="text-2xl font-bold mb-4">Registrar Pago - {selectedPago?.periodo}</h3>
+                                
+                                <form onSubmit={handleRegistrarPago} className="space-y-4">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Monto Pagado (Bs.) *</label>
+                                            <input
+                                                type="number"
+                                                step="0.01"
+                                                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                                                value={registerFormData.monto_pagado}
+                                                onChange={(e) => setRegisterFormData({...registerFormData, monto_pagado: e.target.value})}
+                                                required
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Fecha de Pago *</label>
+                                            <input
+                                                type="date"
+                                                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                                                value={registerFormData.fecha_pago}
+                                                onChange={(e) => setRegisterFormData({...registerFormData, fecha_pago: e.target.value})}
+                                                required
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Forma de Pago *</label>
+                                            <select
+                                                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                                                value={registerFormData.forma_pago}
+                                                onChange={(e) => setRegisterFormData({...registerFormData, forma_pago: e.target.value})}
+                                                required
+                                            >
+                                                <option value="transferencia">Transferencia</option>
+                                                <option value="efectivo">Efectivo</option>
+                                                <option value="cheque">Cheque</option>
+                                                <option value="deposito">Depósito</option>
+                                                <option value="qr">QR</option>
+                                            </select>
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Número de Comprobante</label>
+                                            <input
+                                                type="text"
+                                                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                                                value={registerFormData.numero_comprobante}
+                                                onChange={(e) => setRegisterFormData({...registerFormData, numero_comprobante: e.target.value})}
+                                            />
+                                        </div>
+
+                                        <div className="md:col-span-2">
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Nota</label>
+                                            <textarea
+                                                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                                                rows="2"
+                                                value={registerFormData.nota}
+                                                onChange={(e) => setRegisterFormData({...registerFormData, nota: e.target.value})}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {distribucion && (
+                                        <div className="border-t pt-4 mt-4">
+                                            <h4 className="text-xl font-bold mb-4 text-green-600">✅ Pago Registrado Exitosamente</h4>
+                                            
+                                            <div className="bg-gray-50 p-4 rounded-lg mb-4">
+                                                <h5 className="font-semibold mb-2">Información del Pago:</h5>
+                                                <p>Periodo: {distribucion.pago.periodo}</p>
+                                                <p>Monto: Bs. {distribucion.pago.monto_pagado?.toLocaleString()}</p>
+                                                <p>Estado: {distribucion.pago.estado}</p>
+                                            </div>
+
+                                            {distribucion.mora && (
+                                                <div className="bg-yellow-50 p-4 rounded-lg mb-4">
+                                                    <h5 className="font-semibold mb-2">Mora:</h5>
+                                                    <p>Días de atraso: {distribucion.mora.dias_atraso}</p>
+                                                    <p>Mora calculada: Bs. {distribucion.mora.mora_calculada?.toLocaleString()}</p>
+                                                    <p className="font-bold">Total: Bs. {distribucion.mora.monto_total?.toLocaleString()}</p>
+                                                </div>
+                                            )}
+
+                                            {distribucion.distribucion && distribucion.distribucion.tipo === 'copropiedad' && (
+                                                <div className="bg-green-50 p-4 rounded-lg">
+                                                    <h5 className="font-semibold mb-3">🎉 Distribución Automática a Copropietarios:</h5>
+                                                    {distribucion.distribucion.distribuciones.map((dist, i) => (
+                                                        <div key={i} className="mb-3 p-3 bg-white rounded border-l-4 border-green-500">
+                                                            <p className="font-bold text-lg">{dist.copropietario}</p>
+                                                            <p>Porcentaje: {dist.porcentaje}%</p>
+                                                            <p className="text-2xl font-bold text-green-600">Bs. {dist.monto?.toLocaleString()}</p>
+                                                            <p className="text-sm text-gray-600">Cuenta: {dist.cuenta_bancaria}</p>
+                                                            <p className="text-sm text-gray-600">Banco: {dist.banco}</p>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    <div className="flex gap-4 pt-4">
+                                        {!distribucion && (
+                                            <button
+                                                type="submit"
+                                                className="flex-1 bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700"
+                                            >
+                                                Registrar Pago
+                                            </button>
+                                        )}
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setShowRegisterModal(false);
+                                                setDistribucion(null);
+                                            }}
+                                            className="flex-1 bg-gray-300 text-gray-700 py-3 rounded-lg font-semibold hover:bg-gray-400"
+                                        >
+                                            {distribucion ? 'Cerrar' : 'Cancelar'}
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        // Reportes View
+        function ReportesView({ stats }) {
+            const [morosidad, setMorosidad] = useState(null);
+
+            useEffect(() => {
+                loadMorosidad();
+            }, []);
+
+            const loadMorosidad = async () => {
+                try {
+                    const data = await api.reportes.morosidad();
+                    setMorosidad(data);
+                } catch (error) {
+                    console.error('Error loading morosidad:', error);
+                }
+            };
+
+            if (!stats || !morosidad) return <div className="text-center py-8">Cargando...</div>;
+
+            return (
+                <div className="space-y-6 fade-in">
+                    <h2 className="text-2xl font-bold text-gray-800">Reportes y Estadísticas</h2>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="bg-white p-6 rounded-lg shadow">
+                            <h3 className="text-xl font-bold mb-4">Ingresos por Mes ({stats.anio})</h3>
+                            <div className="space-y-2">
+                                {Object.entries(stats.ingresos_mensuales || {}).map(([mes, monto]) => (
+                                    <div key={mes} className="flex justify-between items-center">
+                                        <span className="text-gray-600">Mes {mes}</span>
+                                        <span className="font-bold text-green-600">Bs. {monto.toLocaleString()}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="bg-white p-6 rounded-lg shadow">
+                            <h3 className="text-xl font-bold mb-4">Morosidad</h3>
+                            <p className="text-sm text-gray-600 mb-4">
+                                Total contratos con mora: {morosidad.total_contratos_mora}
+                            </p>
+                            <p className="text-3xl font-bold text-red-600 mb-4">
+                                Bs. {morosidad.mora_total_sistema.toLocaleString()}
+                            </p>
+                            <div className="space-y-2 max-h-64 overflow-y-auto">
+                                {morosidad.contratos.map(cont => (
+                                    <div key={cont.contrato_id} className="p-3 bg-red-50 rounded">
+                                        <p className="font-semibold">{cont.numero_contrato}</p>
+                                        <p className="text-sm text-gray-600">{cont.propiedad}</p>
+                                        <p className="text-red-600 font-bold">Mora: Bs. {cont.mora_total.toLocaleString()}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // Main App
+        function App() {
+            const [user, setUser] = useState(null);
+
+            useEffect(() => {
+                const token = localStorage.getItem('token');
+                const userData = localStorage.getItem('user');
+                if (token && userData) {
+                    setUser(JSON.parse(userData));
+                }
+            }, []);
+
+            if (!user) {
+                return <Login onLogin={setUser} />;
+            }
+
+            return <Dashboard user={user} />;
+        }
+
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>

@@ -21,8 +21,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copiar código de la aplicación
 COPY ./app ./app
-COPY ./alembic ./alembic
-COPY alembic.ini .
+COPY ./frontend ./frontend
+# COPY ./alembic ./alembic
+# COPY alembic.ini .
 
 # Crear directorios necesarios
 RUN mkdir -p /app/generated_contracts /app/uploads
