@@ -21,7 +21,9 @@ class Contrato(BaseModel):
     
     # Relaciones
     propiedad_id = Column(Integer, ForeignKey("propiedades.id"), nullable=False)
+    unidad_id = Column(Integer, ForeignKey("unidades_alquiler.id"), nullable=True)
     inquilino_id = Column(Integer, ForeignKey("inquilinos.id"), nullable=False)
+    unidad_alquiler = relationship("UnidadAlquiler", back_populates="contratos")
     
     # Fechas
     fecha_inicio = Column(Date, nullable=False)

@@ -51,3 +51,5 @@ class Propiedad(BaseModel):
     
     def __repr__(self):
         return f"<Propiedad(id={self.id}, direccion='{self.direccion}', tipo='{self.tipo}')>"
+unidades = relationship("UnidadAlquiler", back_populates="propiedad")
+gastos = relationship("GastoPropiedad", back_populates="propiedad")
