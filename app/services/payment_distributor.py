@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Dict, List
 from sqlalchemy.orm import Session
 from app.models.pago import Pago
-from app.models.propiedad import Propiedad, TipoPropiedad
+from app.models.propiedad import Propiedad
 from app.models.copropietario import Copropietario
 from app.models.distribucion_pago import DistribucionPago, EstadoDistribucion
 

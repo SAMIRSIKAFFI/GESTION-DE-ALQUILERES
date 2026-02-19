@@ -1,39 +1,28 @@
 """
-Modelos de la aplicación
-
-Importar todos los modelos aquí para que Alembic los detecte
+Importar todos los modelos para que SQLAlchemy los registre
 """
-
-from app.models.base_model import BaseModel
 from app.models.user import User
-from app.models.empresa import Empresa
-from app.models.propiedad import Propiedad, TipoPropiedad, EstadoPropiedad
+from app.models.propiedad import Propiedad
 from app.models.copropietario import Copropietario
 from app.models.inquilino import Inquilino
-from app.models.contrato import Contrato, EstadoContrato
-from app.models.pago import Pago, EstadoPago, FormaPago
-from app.models.distribucion_pago import DistribucionPago, EstadoDistribucion
+from app.models.contrato import Contrato
+from app.models.pago import Pago
+from app.models.distribucion_pago import DistribucionPago
+from app.models.impuesto import ImpuestoAlquiler, FacturaCompensacion
+from app.models.unidad_gasto import UnidadAlquiler, GastoPropiedad
+from app.models.base_model import BaseModel
 
 __all__ = [
-    "BaseModel",
     "User",
-    "Empresa",
     "Propiedad",
-    "TipoPropiedad",
-    "EstadoPropiedad",
     "Copropietario",
     "Inquilino",
     "Contrato",
-    "EstadoContrato",
     "Pago",
-    "EstadoPago",
-    "FormaPago",
     "DistribucionPago",
-    "EstadoDistribucion",
+    "ImpuestoAlquiler",
+    "FacturaCompensacion",
+    "UnidadAlquiler",
+    "GastoPropiedad",
+    "BaseModel"
 ]
-
-from app.models.impuesto import ImpuestoAlquiler, FacturaCompensacion
-
-from app.models.unidad_gasto import UnidadAlquiler, GastoPropiedad
-
-from app.models.unidad_gasto import UnidadAlquiler, GastoPropiedad

@@ -1,55 +1,52 @@
-import enum
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, Enum, Text
+"""
+Modelo de Propiedad
+"""
+from sqlalchemy import Column, Integer, String, Float, Text, Boolean
 from sqlalchemy.orm import relationship
-from app.models.base_model import BaseModel
+from app.database.base import Base
+from datetime import datetime
+from sqlalchemy import DateTime
 
 
-class TipoPropiedad(str, enum.Enum):
-    """Tipos de propiedad"""
-    PROPIA = "propia"
-    COPROPIEDAD = "copropiedad"
-
-
-class EstadoPropiedad(str, enum.Enum):
-    """Estados de una propiedad"""
-    DISPONIBLE = "disponible"
-    ALQUILADO = "alquilado"
-    MANTENIMIENTO = "mantenimiento"
-
-
-class Propiedad(BaseModel):
-    """Modelo de Propiedad Inmobiliaria"""
-    
+class Propiedad(Base):
     __tablename__ = "propiedades"
-    
+
     id = Column(Integer, primary_key=True, index=True)
-    empresa_id = Column(Integer, ForeignKey("empresas.id"), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    deleted_at = Column(DateTime, nullable=True)
+
+    # Información básica
+    direccion = Column(String(255), nullable=False)
+    ciudad = Column(String(100), nullable=False)
+    zona = Column(String(100), nullable=True)
     
-    # Datos de ubicación
-    direccion = Column(String(300), nullable=False)
-    ciudad = Column(String(100), default="La Paz", nullable=False)
-    departamento = Column(String(100), default="La Paz", nullable=False)
-    zona = Column(String(100))
+    # Tipo de propiedad: propia o copropiedad
+    tipo = Column(String(50), nullable=False)  # "propia" o "copropiedad"
     
-    # Características
-    tipo = Column(Enum(TipoPropiedad), nullable=False)
-    tipo_inmueble = Column(String(50))  # casa, departamento, oficina, local
-    superficie = Column(Float)  # metros cuadrados
-    dormitorios = Column(Integer)
-    banos = Column(Integer)
-    descripcion = Column(Text)
+    # Tipo de inmueble
+    tipo_inmueble = Column(String(100), nullable=True)
+    
+    # Detalles físicos
+    superficie = Column(Float, nullable=True)
+    dormitorios = Column(Integer, nullable=True)
+    banos = Column(Integer, nullable=True)
     
     # Financiero
     canon_base = Column(Float, nullable=False)
-    moneda = Column(String(3), default="BOB", nullable=False)
-    estado = Column(Enum(EstadoPropiedad), default=EstadoPropiedad.DISPONIBLE, nullable=False)
+    moneda = Column(String(10), default="BOB")
     
-    # Relationships
-    empresa = relationship("Empresa", back_populates="propiedades")
+    # Descripción
+    descripcion = Column(Text, nullable=True)
+    
+    # Estado
+    estado = Column(String(50), default="disponible")
+    
+    # Copropiedades
+    numero_copropietarios = Column(Integer, default=1)
+
+    # Relaciones
     copropietarios = relationship("Copropietario", back_populates="propiedad", cascade="all, delete-orphan")
     contratos = relationship("Contrato", back_populates="propiedad")
-    
-    def __repr__(self):
-        return f"<Propiedad(id={self.id}, direccion='{self.direccion}', tipo='{self.tipo}')>"
-unidades = relationship("UnidadAlquiler", back_populates="propiedad")
-gastos = relationship("GastoPropiedad", back_populates="propiedad")
+    unidades = relationship("UnidadAlquiler", back_populates="propiedad")
+    gastos = relationship("GastoPropiedad", back_populates="propiedad")
