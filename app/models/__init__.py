@@ -33,3 +33,7 @@ __all__ = [
 ]
 
 from app.models.impuesto import ImpuestoAlquiler, FacturaCompensacion
+
+from app.models.unidad_gasto import UnidadAlquiler, GastoPropiedad
+
+from app.models.unidad_gasto import UnidadAlquiler, GastoPropiedad

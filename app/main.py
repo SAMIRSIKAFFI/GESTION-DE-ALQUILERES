@@ -34,7 +34,7 @@ app.add_middleware(
 )
 
 # Importar routers
-from app.api.v1 import auth, propiedades, inquilinos, contratos, pagos, reportes, impuestos
+from app.api.v1 import auth, propiedades, inquilinos, contratos, pagos, reportes, impuestos, unidades_gastos
 
 # Registrar routers
 app.include_router(auth.router, prefix="/api/v1", tags=["Autenticación"])
@@ -43,6 +43,8 @@ app.include_router(inquilinos.router, prefix="/api/v1", tags=["Inquilinos"])
 app.include_router(contratos.router, prefix="/api/v1", tags=["Contratos"])
 app.include_router(pagos.router, prefix="/api/v1", tags=["Pagos"])
 app.include_router(impuestos.router, prefix="/api/v1", tags=["Impuestos"])
+app.include_router(unidades_gastos.router, prefix="/api/v1", tags=["Unidades y Gastos"])
+app.include_router(unidades_gastos.router, prefix="/api/v1", tags=["Unidades y Gastos"])
 
 app.mount("/static", StaticFiles(directory="frontend"), name="static")
 
