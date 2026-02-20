@@ -1,7 +1,4 @@
-"""
-Modelo de Propiedad
-"""
-from sqlalchemy import Column, Integer, String, Float, Text, Boolean
+from sqlalchemy import Column, Integer, String, Float, Text
 from sqlalchemy.orm import relationship
 from app.database.base import Base
 from datetime import datetime
@@ -21,11 +18,8 @@ class Propiedad(Base):
     ciudad = Column(String(100), nullable=False)
     zona = Column(String(100), nullable=True)
     
-    # Tipo de propiedad: propia o copropiedad
-    tipo = Column(String(50), nullable=False)  # "propia" o "copropiedad"
-    
-    # Tipo de inmueble
-    tipo_inmueble = Column(String(100), nullable=True)
+    # Tipo: "propia" o "copropiedad" (STRING, no ENUM)
+    tipo = Column(String(50), nullable=False, default="propia")
     
     # Detalles físicos
     superficie = Column(Float, nullable=True)
@@ -39,11 +33,8 @@ class Propiedad(Base):
     # Descripción
     descripcion = Column(Text, nullable=True)
     
-    # Estado
+    # Estado: "disponible", "ocupado", etc (STRING, no ENUM)
     estado = Column(String(50), default="disponible")
-    
-    # Copropiedades
-    numero_copropietarios = Column(Integer, default=1)
 
     # Relaciones
     copropietarios = relationship("Copropietario", back_populates="propiedad", cascade="all, delete-orphan")

@@ -52,8 +52,7 @@ def crear_contrato(
     # Verificar que la propiedad existe y pertenece al usuario
     propiedad = db.query(Propiedad).filter(
         Propiedad.id == contrato_data.propiedad_id,
-        Propiedad.empresa_id == current_user.empresa_id
-    ).first()
+         ).first()
     
     if not propiedad:
         raise HTTPException(
@@ -89,7 +88,6 @@ def listar_contratos(
 ):
     """Listar todos los contratos"""
     contratos = db.query(Contrato).join(Propiedad).filter(
-        Propiedad.empresa_id == current_user.empresa_id,
         Contrato.deleted_at == None
     ).offset(skip).limit(limit).all()
     
@@ -105,8 +103,7 @@ def obtener_contrato(
     """Obtener detalles de un contrato"""
     contrato = db.query(Contrato).join(Propiedad).filter(
         Contrato.id == contrato_id,
-        Propiedad.empresa_id == current_user.empresa_id,
-        Contrato.deleted_at == None
+                Contrato.deleted_at == None
     ).first()
     
     if not contrato:

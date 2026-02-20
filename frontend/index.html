@@ -3,119 +3,28 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mi Sistema de Alquileres - Gestión Fácil</title>
+    <title>Sistema de Alquileres - Completo</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
-        * {
-            font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
-        }
-        
-        body {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-        }
-
-        @keyframes slideUp {
-            from {
-                opacity: 0;
-                transform: translateY(20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
-
-        @keyframes scaleIn {
-            from {
-                opacity: 0;
-                transform: scale(0.9);
-            }
-            to {
-                opacity: 1;
-                transform: scale(1);
-            }
-        }
-
-        .animate-slide-up {
-            animation: slideUp 0.5s ease-out;
-        }
-
-        .animate-fade-in {
-            animation: fadeIn 0.3s ease-out;
-        }
-
-        .animate-scale-in {
-            animation: scaleIn 0.3s ease-out;
-        }
-
-        .glass-card {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.3);
-        }
-
-        .metric-card {
-            transition: all 0.3s ease;
-        }
-
-        .metric-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
-        }
-
-        .btn-primary {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            transition: all 0.3s ease;
-        }
-
-        .btn-primary:hover {
-            transform: scale(1.05);
-            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
-        }
-
-        .tooltip {
-            position: relative;
-            cursor: help;
-        }
-
-        .tooltip:hover::after {
-            content: attr(data-tip);
-            position: absolute;
-            bottom: 100%;
-            left: 50%;
-            transform: translateX(-50%);
-            padding: 0.5rem 1rem;
-            background: #1f2937;
-            color: white;
-            border-radius: 0.5rem;
-            font-size: 0.875rem;
-            white-space: nowrap;
-            z-index: 1000;
-            margin-bottom: 0.5rem;
-            animation: fadeIn 0.2s ease;
-        }
-
-        .empty-state {
-            opacity: 0.6;
-        }
-
-        input:focus, select:focus, textarea:focus {
-            outline: none;
-            border-color: #667eea;
-            ring: 2px;
-            ring-color: rgba(102, 126, 234, 0.2);
-        }
+        * { font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif; }
+        body { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes scaleIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+        .animate-slide-up { animation: slideUp 0.5s ease-out; }
+        .animate-fade-in { animation: fadeIn 0.3s ease-out; }
+        .animate-scale-in { animation: scaleIn 0.3s ease-out; }
+        .glass-card { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.3); }
+        .metric-card { transition: all 0.3s ease; }
+        .metric-card:hover { transform: translateY(-5px); box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15); }
+        .btn-primary { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); transition: all 0.3s ease; }
+        .btn-primary:hover { transform: scale(1.05); box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4); }
+        .modal-overlay { background: rgba(0, 0, 0, 0.5); }
+        input:focus, select:focus, textarea:focus { outline: none; border-color: #667eea; }
     </style>
 </head>
 <body>
@@ -123,29 +32,34 @@
 
     <script type="text/babel">
         const { useState, useEffect } = React;
-
-        // API Configuration
         const API_URL = 'http://localhost:8000/api/v1';
 
-        // Componente principal
+        const fetchWithToken = async (url, options = {}) => {
+            const token = localStorage.getItem('token');
+            const headers = {
+                'Content-Type': 'application/json',
+                ...(token && { 'Authorization': `Bearer ${token}` }),
+                ...options.headers
+            };
+            const response = await fetch(url, { ...options, headers });
+            if (!response.ok && response.status === 401) {
+                localStorage.removeItem('token');
+                localStorage.removeItem('user');
+                window.location.reload();
+            }
+            return response;
+        };
+
         function App() {
             const [user, setUser] = useState(null);
             const [loading, setLoading] = useState(true);
             const [currentView, setCurrentView] = useState('dashboard');
-            const [showWelcome, setShowWelcome] = useState(false);
 
             useEffect(() => {
                 const token = localStorage.getItem('token');
                 const userData = localStorage.getItem('user');
-                
                 if (token && userData) {
                     setUser(JSON.parse(userData));
-                    
-                    // Verificar si es primera vez
-                    if (!localStorage.getItem('hasVisited')) {
-                        setShowWelcome(true);
-                        localStorage.setItem('hasVisited', 'true');
-                    }
                 }
                 setLoading(false);
             }, []);
@@ -162,11 +76,7 @@
             }
 
             if (!user) {
-                return <LoginPage setUser={setUser} setShowWelcome={setShowWelcome} />;
-            }
-
-            if (showWelcome) {
-                return <WelcomeGuide onComplete={() => setShowWelcome(false)} user={user} />;
+                return <LoginPage setUser={setUser} />;
             }
 
             return (
@@ -175,26 +85,17 @@
                     <div className="max-w-7xl mx-auto px-4 py-8">
                         {currentView === 'dashboard' && <Dashboard user={user} />}
                         {currentView === 'propiedades' && <Propiedades />}
-                        {currentView === 'unidades' && <Unidades />}
                         {currentView === 'inquilinos' && <Inquilinos />}
                         {currentView === 'contratos' && <Contratos />}
                         {currentView === 'pagos' && <Pagos />}
-                        {currentView === 'gastos' && <Gastos />}
-                        {currentView === 'impuestos' && <Impuestos />}
-                        {currentView === 'ayuda' && <Ayuda />}
                     </div>
                 </div>
             );
         }
 
-        // Componente de Login
-        function LoginPage({ setUser, setShowWelcome }) {
+        function LoginPage({ setUser }) {
             const [isLogin, setIsLogin] = useState(true);
-            const [formData, setFormData] = useState({
-                email: '',
-                password: '',
-                full_name: ''
-            });
+            const [formData, setFormData] = useState({ email: '', password: '', full_name: '' });
             const [error, setError] = useState('');
             const [loading, setLoading] = useState(false);
 
@@ -212,25 +113,11 @@
                     });
 
                     const data = await response.json();
-
-                    if (!response.ok) {
-                        throw new Error(data.detail || 'Error al procesar la solicitud');
-                    }
+                    if (!response.ok) throw new Error(data.detail || 'Error al procesar');
 
                     localStorage.setItem('token', data.access_token);
-                    localStorage.setItem('user', JSON.stringify({
-                        email: formData.email,
-                        full_name: formData.full_name || formData.email
-                    }));
-                    
-                    setUser({
-                        email: formData.email,
-                        full_name: formData.full_name || formData.email
-                    });
-                    
-                    if (!isLogin) {
-                        setShowWelcome(true);
-                    }
+                    localStorage.setItem('user', JSON.stringify({ email: formData.email, full_name: formData.full_name || formData.email }));
+                    setUser({ email: formData.email, full_name: formData.full_name || formData.email });
                 } catch (err) {
                     setError(err.message);
                 } finally {
@@ -247,79 +134,34 @@
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
                                 </svg>
                             </div>
-                            <h1 className="text-3xl font-bold text-gray-900 mb-2">
-                                {isLogin ? '¡Bienvenido!' : '¡Empieza Ahora!'}
-                            </h1>
-                            <p className="text-gray-600">
-                                {isLogin ? 'Gestiona tus alquileres fácilmente' : 'Crea tu cuenta gratuita'}
-                            </p>
+                            <h1 className="text-3xl font-bold text-gray-900 mb-2">{isLogin ? '¡Bienvenido!' : '¡Empieza Ahora!'}</h1>
+                            <p className="text-gray-600">{isLogin ? 'Gestiona tus alquileres fácilmente' : 'Crea tu cuenta gratuita'}</p>
                         </div>
 
-                        {error && (
-                            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
-                                {error}
-                            </div>
-                        )}
+                        {error && <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">{error}</div>}
 
                         <form onSubmit={handleSubmit} className="space-y-5">
                             {!isLogin && (
                                 <div>
-                                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                        Tu nombre completo
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={formData.full_name}
-                                        onChange={(e) => setFormData({...formData, full_name: e.target.value})}
-                                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl"
-                                        placeholder="Juan Pérez"
-                                        required
-                                    />
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">Tu nombre completo</label>
+                                    <input type="text" value={formData.full_name} onChange={(e) => setFormData({...formData, full_name: e.target.value})} className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl" placeholder="Juan Pérez" required />
                                 </div>
                             )}
-
                             <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                    Tu correo electrónico
-                                </label>
-                                <input
-                                    type="email"
-                                    value={formData.email}
-                                    onChange={(e) => setFormData({...formData, email: e.target.value})}
-                                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl"
-                                    placeholder="tu@email.com"
-                                    required
-                                />
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">Tu correo electrónico</label>
+                                <input type="email" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl" placeholder="tu@email.com" required />
                             </div>
-
                             <div>
-                                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                    Tu contraseña
-                                </label>
-                                <input
-                                    type="password"
-                                    value={formData.password}
-                                    onChange={(e) => setFormData({...formData, password: e.target.value})}
-                                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl"
-                                    placeholder="••••••••"
-                                    required
-                                />
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">Tu contraseña</label>
+                                <input type="password" value={formData.password} onChange={(e) => setFormData({...formData, password: e.target.value})} className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl" placeholder="••••••••" required />
                             </div>
-
-                            <button
-                                type="submit"
-                                disabled={loading}
-                                className="w-full btn-primary text-white font-semibold py-3 rounded-xl shadow-lg disabled:opacity-50"
-                            >
+                            <button type="submit" disabled={loading} className="w-full btn-primary text-white font-semibold py-3 rounded-xl shadow-lg disabled:opacity-50">
                                 {loading ? 'Procesando...' : (isLogin ? 'Entrar' : 'Crear Cuenta')}
                             </button>
                         </form>
 
                         <div className="mt-6 text-center">
-                            <button
-                                onClick={() => setIsLogin(!isLogin)}
-                                className="text-purple-600 font-semibold hover:underline"
-                            >
+                            <button onClick={() => setIsLogin(!isLogin)} className="text-purple-600 font-semibold hover:underline">
                                 {isLogin ? '¿Primera vez? Crea una cuenta' : '¿Ya tienes cuenta? Entra aquí'}
                             </button>
                         </div>
@@ -328,111 +170,7 @@
             );
         }
 
-        // Componente de Bienvenida
-        function WelcomeGuide({ onComplete, user }) {
-            const [step, setStep] = useState(0);
-
-            const steps = [
-                {
-                    icon: '🎉',
-                    title: `¡Hola ${user.full_name}!`,
-                    description: 'Bienvenido a tu sistema de gestión de alquileres. Vamos a hacer un tour rápido de 2 minutos.',
-                    color: 'bg-purple-500'
-                },
-                {
-                    icon: '🏠',
-                    title: 'Primero: Tus Propiedades',
-                    description: 'Aquí registras tus casas, edificios o locales. Puedes tener propiedades 100% tuyas o compartidas con socios.',
-                    color: 'bg-blue-500'
-                },
-                {
-                    icon: '🏪',
-                    title: 'Luego: Las Unidades',
-                    description: 'Si tu propiedad tiene varias tiendas o departamentos, cada uno es una "unidad" con su propio precio.',
-                    color: 'bg-green-500'
-                },
-                {
-                    icon: '👥',
-                    title: 'Inquilinos y Contratos',
-                    description: 'Registra a las personas que alquilan y crea contratos. El sistema calcula todo automáticamente.',
-                    color: 'bg-orange-500'
-                },
-                {
-                    icon: '💰',
-                    title: 'Pagos Inteligentes',
-                    description: 'Cuando registras un pago, el sistema calcula automáticamente cuánto le toca a cada socio y muestra las cuentas bancarias.',
-                    color: 'bg-pink-500'
-                },
-                {
-                    icon: '🚀',
-                    title: '¡Listo para Empezar!',
-                    description: 'No te preocupes, cada sección tiene ayuda. Presiona el botón "?" para ver guías.',
-                    color: 'bg-indigo-500'
-                }
-            ];
-
-            const currentStep = steps[step];
-
-            return (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 px-4 animate-fade-in">
-                    <div className="glass-card rounded-3xl shadow-2xl p-8 md:p-12 w-full max-w-2xl animate-scale-in">
-                        <div className="text-center">
-                            <div className={`inline-flex items-center justify-center w-24 h-24 ${currentStep.color} rounded-3xl text-5xl mb-6`}>
-                                {currentStep.icon}
-                            </div>
-                            <h2 className="text-3xl font-bold text-gray-900 mb-4">{currentStep.title}</h2>
-                            <p className="text-xl text-gray-600 mb-8">{currentStep.description}</p>
-
-                            <div className="flex items-center justify-center gap-2 mb-8">
-                                {steps.map((_, idx) => (
-                                    <div
-                                        key={idx}
-                                        className={`h-2 rounded-full transition-all ${
-                                            idx === step ? 'w-8 bg-purple-600' : 'w-2 bg-gray-300'
-                                        }`}
-                                    />
-                                ))}
-                            </div>
-
-                            <div className="flex gap-4">
-                                {step > 0 && (
-                                    <button
-                                        onClick={() => setStep(step - 1)}
-                                        className="flex-1 px-6 py-3 border-2 border-gray-300 text-gray-700 font-semibold rounded-xl hover:bg-gray-50 transition"
-                                    >
-                                        Anterior
-                                    </button>
-                                )}
-                                <button
-                                    onClick={() => {
-                                        if (step === steps.length - 1) {
-                                            onComplete();
-                                        } else {
-                                            setStep(step + 1);
-                                        }
-                                    }}
-                                    className="flex-1 btn-primary text-white font-semibold px-6 py-3 rounded-xl shadow-lg"
-                                >
-                                    {step === steps.length - 1 ? '¡Empezar!' : 'Siguiente'}
-                                </button>
-                            </div>
-
-                            <button
-                                onClick={onComplete}
-                                className="mt-4 text-gray-500 hover:text-gray-700 text-sm"
-                            >
-                                Saltar tutorial
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            );
-        }
-
-        // Navegación
         function Navigation({ user, setUser, currentView, setCurrentView }) {
-            const [showMenu, setShowMenu] = useState(false);
-
             const handleLogout = () => {
                 localStorage.removeItem('token');
                 localStorage.removeItem('user');
@@ -440,33 +178,24 @@
             };
 
             const menuItems = [
-                { id: 'dashboard', icon: '📊', label: 'Inicio', description: 'Tu resumen general' },
-                { id: 'propiedades', icon: '🏢', label: 'Mis Propiedades', description: 'Edificios y casas' },
-                { id: 'unidades', icon: '🏪', label: 'Unidades', description: 'Tiendas y departamentos' },
-                { id: 'inquilinos', icon: '👥', label: 'Inquilinos', description: 'Personas que alquilan' },
-                { id: 'contratos', icon: '📄', label: 'Contratos', description: 'Acuerdos de alquiler' },
-                { id: 'pagos', icon: '💰', label: 'Pagos', description: 'Cobros mensuales' },
-                { id: 'gastos', icon: '💸', label: 'Gastos', description: 'Impuestos y mantenimiento' },
-                { id: 'impuestos', icon: '📑', label: 'Impuestos', description: 'IVA, IT y RC-IVA' },
-                { id: 'ayuda', icon: '❓', label: 'Ayuda', description: 'Guías y tutoriales' },
+                { id: 'dashboard', icon: '📊', label: 'Inicio' },
+                { id: 'propiedades', icon: '🏢', label: 'Propiedades' },
+                { id: 'inquilinos', icon: '👥', label: 'Inquilinos' },
+                { id: 'contratos', icon: '📄', label: 'Contratos' },
+                { id: 'pagos', icon: '💰', label: 'Pagos' },
             ];
 
             return (
                 <nav className="glass-card shadow-lg mb-6">
                     <div className="max-w-7xl mx-auto px-4 py-4">
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-4">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-blue-500 rounded-xl flex items-center justify-center text-2xl">
-                                        🏠
-                                    </div>
-                                    <div className="hidden md:block">
-                                        <h1 className="text-xl font-bold text-gray-900">Mis Alquileres</h1>
-                                        <p className="text-sm text-gray-600">Gestión fácil y rápida</p>
-                                    </div>
+                        <div className="flex items-center justify-between mb-6">
+                            <div className="flex items-center gap-3">
+                                <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-blue-500 rounded-xl flex items-center justify-center text-2xl">🏠</div>
+                                <div className="hidden md:block">
+                                    <h1 className="text-xl font-bold text-gray-900">Mis Alquileres</h1>
+                                    <p className="text-sm text-gray-600">Gestión fácil y rápida</p>
                                 </div>
                             </div>
-
                             <div className="flex items-center gap-4">
                                 <div className="hidden md:flex items-center gap-3 px-4 py-2 bg-gray-50 rounded-xl">
                                     <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center text-white font-semibold">
@@ -474,27 +203,12 @@
                                     </div>
                                     <span className="font-semibold text-gray-900">{user.full_name}</span>
                                 </div>
-                                <button
-                                    onClick={handleLogout}
-                                    className="px-4 py-2 text-gray-600 hover:text-gray-900 font-semibold rounded-xl hover:bg-gray-100 transition"
-                                >
-                                    Salir
-                                </button>
+                                <button onClick={handleLogout} className="px-4 py-2 text-gray-600 hover:text-gray-900 font-semibold rounded-xl hover:bg-gray-100 transition">Salir</button>
                             </div>
                         </div>
-
-                        {/* Menú de navegación */}
-                        <div className="mt-6 grid grid-cols-2 md:grid-cols-4 lg:grid-cols-9 gap-2">
+                        <div className="grid grid-cols-5 gap-2">
                             {menuItems.map((item) => (
-                                <button
-                                    key={item.id}
-                                    onClick={() => setCurrentView(item.id)}
-                                    className={`group p-3 rounded-xl transition-all ${
-                                        currentView === item.id
-                                            ? 'bg-gradient-to-br from-purple-500 to-blue-500 text-white shadow-lg'
-                                            : 'bg-white hover:bg-gray-50 text-gray-700'
-                                    }`}
-                                >
+                                <button key={item.id} onClick={() => setCurrentView(item.id)} className={`p-3 rounded-xl transition-all ${currentView === item.id ? 'bg-gradient-to-br from-purple-500 to-blue-500 text-white shadow-lg' : 'bg-white hover:bg-gray-50 text-gray-700'}`}>
                                     <div className="text-2xl mb-1">{item.icon}</div>
                                     <div className="text-xs font-semibold">{item.label}</div>
                                 </button>
@@ -505,14 +219,8 @@
             );
         }
 
-        // Dashboard Principal
         function Dashboard({ user }) {
-            const [stats, setStats] = useState({
-                propiedades: 0,
-                unidades: 0,
-                inquilinos: 0,
-                ingresos_mes: 0
-            });
+            const [stats, setStats] = useState({ propiedades: 0, inquilinos: 0, contratos: 0, ingresos: 0 });
             const [loading, setLoading] = useState(true);
 
             useEffect(() => {
@@ -521,133 +229,55 @@
 
             const loadStats = async () => {
                 try {
-                    const token = localStorage.getItem('token');
-                    // Aquí irían las llamadas reales a la API
-                    // Por ahora mostramos datos de ejemplo
-                    setTimeout(() => {
-                        setStats({
-                            propiedades: 0,
-                            unidades: 0,
-                            inquilinos: 0,
-                            ingresos_mes: 0
-                        });
-                        setLoading(false);
-                    }, 500);
+                    const [propRes, inqRes, contRes] = await Promise.all([
+                        fetchWithToken(`${API_URL}/propiedades`),
+                        fetchWithToken(`${API_URL}/inquilinos`),
+                        fetchWithToken(`${API_URL}/contratos`)
+                    ]);
+                    const propiedades = await propRes.json();
+                    const inquilinos = await inqRes.json();
+                    const contratos = await contRes.json();
+                    
+                    const ingresos = Array.isArray(contratos) ? contratos.reduce((sum, c) => sum + (c.canon_mensual || 0), 0) : 0;
+                    
+                    setStats({
+                        propiedades: Array.isArray(propiedades) ? propiedades.length : 0,
+                        inquilinos: Array.isArray(inquilinos) ? inquilinos.length : 0,
+                        contratos: Array.isArray(contratos) ? contratos.length : 0,
+                        ingresos: ingresos
+                    });
                 } catch (error) {
-                    console.error('Error cargando estadísticas:', error);
+                    console.error('Error:', error);
+                } finally {
                     setLoading(false);
                 }
             };
 
             if (loading) {
-                return (
-                    <div className="flex items-center justify-center py-20">
-                        <div className="text-center">
-                            <div className="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
-                            <p className="text-white mt-4 font-semibold">Cargando tu información...</p>
-                        </div>
-                    </div>
-                );
+                return <div className="text-center py-20"><div className="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto"></div></div>;
             }
 
             return (
                 <div className="space-y-6 animate-slide-up">
-                    {/* Bienvenida */}
                     <div className="glass-card rounded-3xl p-8 shadow-lg">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <h2 className="text-3xl font-bold text-gray-900 mb-2">
-                                    ¡Hola {user.full_name}! 👋
-                                </h2>
-                                <p className="text-lg text-gray-600">
-                                    Este es tu resumen de hoy. Empecemos agregando tu primera propiedad.
-                                </p>
-                            </div>
-                            <div className="hidden md:block text-6xl">📊</div>
-                        </div>
+                        <h2 className="text-3xl font-bold text-gray-900 mb-2">¡Hola {user.full_name}! 👋</h2>
+                        <p className="text-lg text-gray-600">Este es tu resumen de hoy</p>
                     </div>
 
-                    {/* Métricas principales */}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                        <MetricCard
-                            icon="🏢"
-                            title="Mis Propiedades"
-                            value={stats.propiedades}
-                            subtitle="edificios y casas"
-                            color="from-blue-500 to-cyan-500"
-                            tooltip="Total de propiedades que estás gestionando"
-                        />
-                        <MetricCard
-                            icon="🏪"
-                            title="Unidades"
-                            value={stats.unidades}
-                            subtitle="tiendas y deptos"
-                            color="from-purple-500 to-pink-500"
-                            tooltip="Espacios individuales para alquilar"
-                        />
-                        <MetricCard
-                            icon="👥"
-                            title="Inquilinos"
-                            value={stats.inquilinos}
-                            subtitle="personas activas"
-                            color="from-green-500 to-emerald-500"
-                            tooltip="Personas que están alquilando actualmente"
-                        />
-                        <MetricCard
-                            icon="💰"
-                            title="Ingresos del Mes"
-                            value={`Bs. ${stats.ingresos_mes.toLocaleString()}`}
-                            subtitle="cobros esperados"
-                            color="from-orange-500 to-red-500"
-                            tooltip="Total de ingresos estimados para este mes"
-                        />
+                        <MetricCard icon="🏢" title="Mis Propiedades" value={stats.propiedades} subtitle="edificios y casas" color="from-blue-500 to-cyan-500" />
+                        <MetricCard icon="👥" title="Inquilinos" value={stats.inquilinos} subtitle="personas activas" color="from-green-500 to-emerald-500" />
+                        <MetricCard icon="📄" title="Contratos" value={stats.contratos} subtitle="activos" color="from-purple-500 to-pink-500" />
+                        <MetricCard icon="💰" title="Ingresos Mensuales" value={`Bs. ${stats.ingresos.toLocaleString()}`} subtitle="esperados" color="from-orange-500 to-red-500" />
                     </div>
-
-                    {/* Estado vacío - Primera vez */}
-                    {stats.propiedades === 0 && (
-                        <div className="glass-card rounded-3xl p-12 text-center shadow-lg animate-scale-in">
-                            <div className="text-6xl mb-6">🚀</div>
-                            <h3 className="text-2xl font-bold text-gray-900 mb-4">
-                                ¡Comencemos tu aventura!
-                            </h3>
-                            <p className="text-lg text-gray-600 mb-8 max-w-2xl mx-auto">
-                                Todavía no tienes propiedades registradas. El primer paso es agregar tu primera casa, edificio o local comercial. ¡Es muy fácil!
-                            </p>
-                            <button className="btn-primary text-white font-semibold px-8 py-4 rounded-xl shadow-lg inline-flex items-center gap-3 text-lg">
-                                <span className="text-2xl">➕</span>
-                                Agregar Mi Primera Propiedad
-                            </button>
-                            
-                            <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-6 text-left">
-                                <div className="p-6 bg-blue-50 rounded-2xl">
-                                    <div className="text-3xl mb-3">1️⃣</div>
-                                    <h4 className="font-bold text-gray-900 mb-2">Agrega Propiedades</h4>
-                                    <p className="text-sm text-gray-600">Registra tus edificios, casas o locales comerciales</p>
-                                </div>
-                                <div className="p-6 bg-purple-50 rounded-2xl">
-                                    <div className="text-3xl mb-3">2️⃣</div>
-                                    <h4 className="font-bold text-gray-900 mb-2">Define Unidades</h4>
-                                    <p className="text-sm text-gray-600">Si tienes varias tiendas o deptos, créalas aquí</p>
-                                </div>
-                                <div className="p-6 bg-green-50 rounded-2xl">
-                                    <div className="text-3xl mb-3">3️⃣</div>
-                                    <h4 className="font-bold text-gray-900 mb-2">Gestiona Todo</h4>
-                                    <p className="text-sm text-gray-600">Inquilinos, contratos y pagos automáticos</p>
-                                </div>
-                            </div>
-                        </div>
-                    )}
                 </div>
             );
         }
 
-        // Componente de tarjeta de métrica
-        function MetricCard({ icon, title, value, subtitle, color, tooltip }) {
+        function MetricCard({ icon, title, value, subtitle, color }) {
             return (
-                <div className={`metric-card glass-card rounded-2xl p-6 shadow-lg tooltip`} data-tip={tooltip}>
-                    <div className={`inline-flex p-3 bg-gradient-to-br ${color} rounded-xl text-white text-3xl mb-4`}>
-                        {icon}
-                    </div>
+                <div className="metric-card glass-card rounded-2xl p-6 shadow-lg">
+                    <div className={`inline-flex p-3 bg-gradient-to-br ${color} rounded-xl text-white text-3xl mb-4`}>{icon}</div>
                     <h3 className="text-sm font-semibold text-gray-600 mb-2">{title}</h3>
                     <p className="text-3xl font-bold text-gray-900 mb-1">{value}</p>
                     <p className="text-sm text-gray-500">{subtitle}</p>
@@ -655,48 +285,168 @@
             );
         }
 
-        // Componentes placeholder para otras vistas
         function Propiedades() {
+            const [propiedades, setPropiedades] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [showModal, setShowModal] = useState(false);
+
+            useEffect(() => {
+                loadPropiedades();
+            }, []);
+
+            const loadPropiedades = async () => {
+                try {
+                    const response = await fetchWithToken(`${API_URL}/propiedades`);
+                    const data = await response.json();
+                    setPropiedades(Array.isArray(data) ? data : []);
+                } catch (error) {
+                    console.error('Error:', error);
+                    setPropiedades([]);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            if (loading) {
+                return <div className="text-center py-20"><div className="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto"></div></div>;
+            }
+
             return (
                 <div className="glass-card rounded-3xl p-8 shadow-lg animate-slide-up">
                     <div className="flex items-center justify-between mb-6">
                         <div>
                             <h2 className="text-3xl font-bold text-gray-900 mb-2">🏢 Mis Propiedades</h2>
-                            <p className="text-gray-600">Aquí verás todos tus edificios, casas y locales</p>
+                            <p className="text-gray-600">Todos tus edificios, casas y locales</p>
                         </div>
-                        <button className="btn-primary text-white font-semibold px-6 py-3 rounded-xl shadow-lg inline-flex items-center gap-2">
+                        <button onClick={() => setShowModal(true)} className="btn-primary text-white font-semibold px-6 py-3 rounded-xl shadow-lg inline-flex items-center gap-2">
                             <span className="text-xl">➕</span>
                             Agregar Propiedad
                         </button>
                     </div>
-                    <EmptyState
-                        icon="🏢"
-                        title="Aún no tienes propiedades"
-                        description="Agrega tu primer edificio, casa o local comercial para empezar"
-                    />
+
+                    {propiedades.length === 0 ? (
+                        <EmptyState icon="🏢" title="Aún no tienes propiedades" description="Haz clic en 'Agregar Propiedad' para comenzar" />
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {propiedades.map((prop) => (
+                                <div key={prop.id} className="bg-white rounded-2xl p-6 shadow-lg hover:shadow-xl transition">
+                                    <div className="text-4xl mb-4">🏢</div>
+                                    <h3 className="text-xl font-bold text-gray-900 mb-2">{prop.direccion}</h3>
+                                    <p className="text-gray-600 mb-4">{prop.ciudad}</p>
+                                    <div className="flex items-center justify-between text-sm">
+                                        <span className="text-gray-500">Canon base</span>
+                                        <span className="font-bold text-green-600">Bs. {prop.canon_base.toLocaleString()}</span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {showModal && <PropiedadModal onClose={() => { setShowModal(false); loadPropiedades(); }} />}
                 </div>
             );
         }
 
-        function Unidades() {
+        function PropiedadModal({ onClose }) {
+            const [formData, setFormData] = useState({ direccion: '', ciudad: 'La Paz', tipo: 'propia', canon_base: '', copropietarios: [] });
+            const [loading, setLoading] = useState(false);
+            const [error, setError] = useState('');
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                setError('');
+                setLoading(true);
+
+                try {
+                    const response = await fetchWithToken(`${API_URL}/propiedades`, {
+                        method: 'POST',
+                        body: JSON.stringify({ ...formData, canon_base: parseFloat(formData.canon_base) })
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.detail || 'Error al crear propiedad');
+                    }
+
+                    onClose();
+                } catch (err) {
+                    setError(err.message);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
             return (
-                <div className="glass-card rounded-3xl p-8 shadow-lg animate-slide-up">
-                    <div className="flex items-center justify-between mb-6">
-                        <div>
-                            <h2 className="text-3xl font-bold text-gray-900 mb-2">🏪 Unidades de Alquiler</h2>
-                            <p className="text-gray-600">Tiendas, departamentos y oficinas para alquilar</p>
+                <div className="fixed inset-0 modal-overlay flex items-center justify-center z-50 p-4 animate-fade-in">
+                    <div className="glass-card rounded-3xl shadow-2xl p-8 w-full max-w-2xl max-h-[90vh] overflow-y-auto animate-scale-in">
+                        <div className="flex items-center justify-between mb-6">
+                            <h2 className="text-2xl font-bold text-gray-900">➕ Nueva Propiedad</h2>
+                            <button onClick={onClose} className="text-gray-500 hover:text-gray-700 text-2xl">✕</button>
                         </div>
+
+                        {error && <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">{error}</div>}
+
+                        <form onSubmit={handleSubmit} className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">📍 Dirección</label>
+                                <input type="text" value={formData.direccion} onChange={(e) => setFormData({...formData, direccion: e.target.value})} className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl" placeholder="Calle Comercio #123" required />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">🏙️ Ciudad</label>
+                                <select value={formData.ciudad} onChange={(e) => setFormData({...formData, ciudad: e.target.value})} className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl" required>
+                                    <option value="La Paz">La Paz</option>
+                                    <option value="Santa Cruz">Santa Cruz</option>
+                                    <option value="Cochabamba">Cochabamba</option>
+                                    <option value="Sucre">Sucre</option>
+                                    <option value="Oruro">Oruro</option>
+                                    <option value="Potosí">Potosí</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">💰 Canon Base Mensual (Bs.)</label>
+                                <input type="number" step="0.01" value={formData.canon_base} onChange={(e) => setFormData({...formData, canon_base: e.target.value})} className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl" placeholder="3000" required />
+                            </div>
+
+                            <div className="flex gap-4 pt-4">
+                                <button type="button" onClick={onClose} className="flex-1 px-6 py-3 border-2 border-gray-300 text-gray-700 font-semibold rounded-xl hover:bg-gray-50 transition">Cancelar</button>
+                                <button type="submit" disabled={loading} className="flex-1 btn-primary text-white font-semibold px-6 py-3 rounded-xl shadow-lg disabled:opacity-50">
+                                    {loading ? 'Guardando...' : 'Crear Propiedad'}
+                                </button>
+                            </div>
+                        </form>
                     </div>
-                    <EmptyState
-                        icon="🏪"
-                        title="Sin unidades todavía"
-                        description="Primero agrega una propiedad, luego podrás crear unidades dentro de ella"
-                    />
                 </div>
             );
         }
 
         function Inquilinos() {
+            const [inquilinos, setInquilinos] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [showModal, setShowModal] = useState(false);
+
+            useEffect(() => {
+                loadInquilinos();
+            }, []);
+
+            const loadInquilinos = async () => {
+                try {
+                    const response = await fetchWithToken(`${API_URL}/inquilinos`);
+                    const data = await response.json();
+                    setInquilinos(Array.isArray(data) ? data : []);
+                } catch (error) {
+                    console.error('Error:', error);
+                    setInquilinos([]);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            if (loading) {
+                return <div className="text-center py-20"><div className="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto"></div></div>;
+            }
+
             return (
                 <div className="glass-card rounded-3xl p-8 shadow-lg animate-slide-up">
                     <div className="flex items-center justify-between mb-6">
@@ -704,21 +454,131 @@
                             <h2 className="text-3xl font-bold text-gray-900 mb-2">👥 Mis Inquilinos</h2>
                             <p className="text-gray-600">Personas que alquilan tus propiedades</p>
                         </div>
-                        <button className="btn-primary text-white font-semibold px-6 py-3 rounded-xl shadow-lg inline-flex items-center gap-2">
+                        <button onClick={() => setShowModal(true)} className="btn-primary text-white font-semibold px-6 py-3 rounded-xl shadow-lg inline-flex items-center gap-2">
                             <span className="text-xl">➕</span>
                             Agregar Inquilino
                         </button>
                     </div>
-                    <EmptyState
-                        icon="👥"
-                        title="Todavía no hay inquilinos"
-                        description="Registra a las personas que van a alquilar tus propiedades"
-                    />
+
+                    {inquilinos.length === 0 ? (
+                        <EmptyState icon="👥" title="Todavía no hay inquilinos" description="Registra a las personas que van a alquilar tus propiedades" />
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {inquilinos.map((inq) => (
+                                <div key={inq.id} className="bg-white rounded-2xl p-6 shadow-lg hover:shadow-xl transition">
+                                    <div className="text-4xl mb-4">👤</div>
+                                    <h3 className="text-xl font-bold text-gray-900 mb-2">{inq.nombre_completo}</h3>
+                                    <p className="text-gray-600 mb-2">CI: {inq.ci}</p>
+                                    <p className="text-gray-600 mb-2">📞 {inq.telefono}</p>
+                                    <p className="text-gray-600 text-sm">✉️ {inq.email}</p>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {showModal && <InquilinoModal onClose={() => { setShowModal(false); loadInquilinos(); }} />}
+                </div>
+            );
+        }
+
+        function InquilinoModal({ onClose }) {
+            const [formData, setFormData] = useState({ nombre_completo: '', ci: '', telefono: '', email: '' });
+            const [loading, setLoading] = useState(false);
+            const [error, setError] = useState('');
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                setError('');
+                setLoading(true);
+
+                try {
+                    const response = await fetchWithToken(`${API_URL}/inquilinos`, {
+                        method: 'POST',
+                        body: JSON.stringify(formData)
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.detail || 'Error al crear inquilino');
+                    }
+
+                    onClose();
+                } catch (err) {
+                    setError(err.message);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            return (
+                <div className="fixed inset-0 modal-overlay flex items-center justify-center z-50 p-4 animate-fade-in">
+                    <div className="glass-card rounded-3xl shadow-2xl p-8 w-full max-w-2xl animate-scale-in">
+                        <div className="flex items-center justify-between mb-6">
+                            <h2 className="text-2xl font-bold text-gray-900">👤 Nuevo Inquilino</h2>
+                            <button onClick={onClose} className="text-gray-500 hover:text-gray-700 text-2xl">✕</button>
+                        </div>
+
+                        {error && <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">{error}</div>}
+
+                        <form onSubmit={handleSubmit} className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">👤 Nombre Completo</label>
+                                <input type="text" value={formData.nombre_completo} onChange={(e) => setFormData({...formData, nombre_completo: e.target.value})} className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl" placeholder="Juan Pérez Mamani" required />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">🪪 Carnet de Identidad</label>
+                                <input type="text" value={formData.ci} onChange={(e) => setFormData({...formData, ci: e.target.value})} className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl" placeholder="1234567 LP" required />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">📞 Teléfono</label>
+                                <input type="tel" value={formData.telefono} onChange={(e) => setFormData({...formData, telefono: e.target.value})} className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl" placeholder="71234567" required />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">✉️ Email (opcional)</label>
+                                <input type="email" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl" placeholder="juan@email.com" />
+                            </div>
+
+                            <div className="flex gap-4 pt-4">
+                                <button type="button" onClick={onClose} className="flex-1 px-6 py-3 border-2 border-gray-300 text-gray-700 font-semibold rounded-xl hover:bg-gray-50 transition">Cancelar</button>
+                                <button type="submit" disabled={loading} className="flex-1 btn-primary text-white font-semibold px-6 py-3 rounded-xl shadow-lg disabled:opacity-50">
+                                    {loading ? 'Guardando...' : 'Crear Inquilino'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
                 </div>
             );
         }
 
         function Contratos() {
+            const [contratos, setContratos] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [showModal, setShowModal] = useState(false);
+
+            useEffect(() => {
+                loadContratos();
+            }, []);
+
+            const loadContratos = async () => {
+                try {
+                    const response = await fetchWithToken(`${API_URL}/contratos`);
+                    const data = await response.json();
+                    setContratos(Array.isArray(data) ? data : []);
+                } catch (error) {
+                    console.error('Error:', error);
+                    setContratos([]);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            if (loading) {
+                return <div className="text-center py-20"><div className="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto"></div></div>;
+            }
+
             return (
                 <div className="glass-card rounded-3xl p-8 shadow-lg animate-slide-up">
                     <div className="flex items-center justify-between mb-6">
@@ -726,167 +586,522 @@
                             <h2 className="text-3xl font-bold text-gray-900 mb-2">📄 Contratos de Alquiler</h2>
                             <p className="text-gray-600">Acuerdos con tus inquilinos</p>
                         </div>
-                        <button className="btn-primary text-white font-semibold px-6 py-3 rounded-xl shadow-lg inline-flex items-center gap-2">
+                        <button onClick={() => setShowModal(true)} className="btn-primary text-white font-semibold px-6 py-3 rounded-xl shadow-lg inline-flex items-center gap-2">
                             <span className="text-xl">➕</span>
                             Crear Contrato
                         </button>
                     </div>
-                    <EmptyState
-                        icon="📄"
-                        title="Sin contratos aún"
-                        description="Crea contratos para formalizar los alquileres con tus inquilinos"
-                    />
+
+                    {contratos.length === 0 ? (
+                        <EmptyState icon="📄" title="Sin contratos aún" description="Crea contratos para formalizar los alquileres" />
+                    ) : (
+                        <div className="space-y-4">
+                            {contratos.map((cont) => (
+                                <div key={cont.id} className="bg-white rounded-2xl p-6 shadow-lg hover:shadow-xl transition">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex-1">
+                                            <h3 className="text-lg font-bold text-gray-900 mb-2">Contrato #{cont.numero_contrato}</h3>
+                                            <p className="text-gray-600">Canon: <span className="font-bold text-green-600">Bs. {cont.canon_mensual?.toLocaleString()}</span></p>
+                                            <p className="text-gray-600 text-sm">Desde {cont.fecha_inicio} hasta {cont.fecha_fin}</p>
+                                        </div>
+                                        <div className={`px-4 py-2 rounded-xl font-semibold ${cont.estado === 'activo' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>
+                                            {cont.estado === 'activo' ? '✅ Activo' : '⏸️ Inactivo'}
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {showModal && <ContratoModal onClose={() => { setShowModal(false); loadContratos(); }} />}
+                </div>
+            );
+        }
+
+        function ContratoModal({ onClose }) {
+            const [propiedades, setPropiedades] = useState([]);
+            const [inquilinos, setInquilinos] = useState([]);
+            const [formData, setFormData] = useState({
+                numero_contrato: `CONT-${Date.now()}`,
+                propiedad_id: '',
+                inquilino_id: '',
+                fecha_inicio: '',
+                fecha_fin: '',
+                canon_mensual: '',
+                garantia: '',
+                dia_pago: '5',
+                incremento_anual: '5',
+                tasa_mora_diaria: '0.5'
+            });
+            const [loading, setLoading] = useState(false);
+            const [error, setError] = useState('');
+
+            useEffect(() => {
+                loadData();
+            }, []);
+
+            const loadData = async () => {
+                try {
+                    const [propRes, inqRes] = await Promise.all([
+                        fetchWithToken(`${API_URL}/propiedades`),
+                        fetchWithToken(`${API_URL}/inquilinos`)
+                    ]);
+                    const prop = await propRes.json();
+                    const inq = await inqRes.json();
+                    setPropiedades(Array.isArray(prop) ? prop : []);
+                    setInquilinos(Array.isArray(inq) ? inq : []);
+                } catch (error) {
+                    console.error('Error:', error);
+                }
+            };
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                setError('');
+                setLoading(true);
+
+                try {
+                    const response = await fetchWithToken(`${API_URL}/contratos`, {
+                        method: 'POST',
+                        body: JSON.stringify({
+                            ...formData,
+                            propiedad_id: parseInt(formData.propiedad_id),
+                            inquilino_id: parseInt(formData.inquilino_id),
+                            canon_mensual: parseFloat(formData.canon_mensual),
+                            garantia: parseFloat(formData.garantia),
+                            dia_pago: parseInt(formData.dia_pago),
+                            incremento_anual: parseFloat(formData.incremento_anual),
+                            tasa_mora_diaria: parseFloat(formData.tasa_mora_diaria)
+                        })
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.detail || 'Error al crear contrato');
+                    }
+
+                    onClose();
+                } catch (err) {
+                    setError(err.message);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            return (
+                <div className="fixed inset-0 modal-overlay flex items-center justify-center z-50 p-4 animate-fade-in">
+                    <div className="glass-card rounded-3xl shadow-2xl p-8 w-full max-w-2xl max-h-[90vh] overflow-y-auto animate-scale-in">
+                        <div className="flex items-center justify-between mb-6">
+                            <h2 className="text-2xl font-bold text-gray-900">📄 Nuevo Contrato</h2>
+                            <button onClick={onClose} className="text-gray-500 hover:text-gray-700 text-2xl">✕</button>
+                        </div>
+
+                        {error && <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">{error}</div>}
+
+                        <form onSubmit={handleSubmit} className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">🏢 Propiedad</label>
+                                <select value={formData.propiedad_id} onChange={(e) => setFormData({...formData, propiedad_id: e.target.value})} className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl" required>
+                                    <option value="">Selecciona una propiedad</option>
+                                    {propiedades.map(p => <option key={p.id} value={p.id}>{p.direccion} - {p.ciudad}</option>)}
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">👤 Inquilino</label>
+                                <select value={formData.inquilino_id} onChange={(e) => setFormData({...formData, inquilino_id: e.target.value})} className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl" required>
+                                    <option value="">Selecciona un inquilino</option>
+                                    {inquilinos.map(i => <option key={i.id} value={i.id}>{i.nombre_completo} - CI: {i.ci}</option>)}
+                                </select>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">📅 Fecha Inicio</label>
+                                    <input type="date" value={formData.fecha_inicio} onChange={(e) => setFormData({...formData, fecha_inicio: e.target.value})} className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl" required />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">📅 Fecha Fin</label>
+                                    <input type="date" value={formData.fecha_fin} onChange={(e) => setFormData({...formData, fecha_fin: e.target.value})} className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl" required />
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">💰 Canon Mensual (Bs.)</label>
+                                    <input type="number" step="0.01" value={formData.canon_mensual} onChange={(e) => setFormData({...formData, canon_mensual: e.target.value})} className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl" required />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">🛡️ Garantía (Bs.)</label>
+                                    <input type="number" step="0.01" value={formData.garantia} onChange={(e) => setFormData({...formData, garantia: e.target.value})} className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl" required />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">📆 Día de Pago (1-31)</label>
+                                <input type="number" min="1" max="31" value={formData.dia_pago} onChange={(e) => setFormData({...formData, dia_pago: e.target.value})} className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl" required />
+                            </div>
+
+                            <div className="flex gap-4 pt-4">
+                                <button type="button" onClick={onClose} className="flex-1 px-6 py-3 border-2 border-gray-300 text-gray-700 font-semibold rounded-xl hover:bg-gray-50 transition">Cancelar</button>
+                                <button type="submit" disabled={loading} className="flex-1 btn-primary text-white font-semibold px-6 py-3 rounded-xl shadow-lg disabled:opacity-50">
+                                    {loading ? 'Creando...' : 'Crear Contrato'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
                 </div>
             );
         }
 
         function Pagos() {
-            return (
-                <div className="glass-card rounded-3xl p-8 shadow-lg animate-slide-up">
-                    <div className="flex items-center justify-between mb-6">
-                        <div>
-                            <h2 className="text-3xl font-bold text-gray-900 mb-2">💰 Pagos Mensuales</h2>
-                            <p className="text-gray-600">Cobros y distribución automática a socios</p>
-                        </div>
-                    </div>
-                    <EmptyState
-                        icon="💰"
-                        title="Aún no hay pagos registrados"
-                        description="Cuando tengas contratos activos, podrás registrar los pagos aquí"
-                    />
-                </div>
-            );
-        }
+            const [contratos, setContratos] = useState([]);
+            const [contratoSeleccionado, setContratoSeleccionado] = useState(null);
+            const [pagos, setPagos] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [showModalCrear, setShowModalCrear] = useState(false);
+            const [showModalRegistrar, setShowModalRegistrar] = useState(false);
+            const [pagoARegistrar, setPagoARegistrar] = useState(null);
 
-        function Gastos() {
-            return (
-                <div className="glass-card rounded-3xl p-8 shadow-lg animate-slide-up">
-                    <div className="flex items-center justify-between mb-6">
-                        <div>
-                            <h2 className="text-3xl font-bold text-gray-900 mb-2">💸 Gastos de Propiedades</h2>
-                            <p className="text-gray-600">Impuestos, mantenimiento y mejoras</p>
-                        </div>
-                        <button className="btn-primary text-white font-semibold px-6 py-3 rounded-xl shadow-lg inline-flex items-center gap-2">
-                            <span className="text-xl">➕</span>
-                            Registrar Gasto
-                        </button>
-                    </div>
-                    <EmptyState
-                        icon="💸"
-                        title="Sin gastos registrados"
-                        description="Lleva control de impuestos, reparaciones y mantenimiento de tus propiedades"
-                    />
-                </div>
-            );
-        }
+            useEffect(() => {
+                loadContratos();
+            }, []);
 
-        function Impuestos() {
-            return (
-                <div className="glass-card rounded-3xl p-8 shadow-lg animate-slide-up">
-                    <div className="mb-6">
-                        <h2 className="text-3xl font-bold text-gray-900 mb-2">📑 Calculadora de Impuestos</h2>
-                        <p className="text-gray-600">IVA 13%, IT 3% y RC-IVA 12.5% bolivianos</p>
-                    </div>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                        <div className="p-6 bg-blue-50 rounded-2xl">
-                            <h3 className="font-bold text-gray-900 mb-2">📊 IVA 13%</h3>
-                            <p className="text-sm text-gray-600 mb-3">Se paga cada mes. Puedes compensar con facturas hasta el 30% del alquiler.</p>
-                            <div className="text-xs text-gray-500">Ejemplo: Alquiler Bs. 3,000 → IVA Bs. 390</div>
-                        </div>
-                        <div className="p-6 bg-green-50 rounded-2xl">
-                            <h3 className="font-bold text-gray-900 mb-2">🔒 IT 3%</h3>
-                            <p className="text-sm text-gray-600 mb-3">Se paga cada mes. NO se puede compensar con facturas.</p>
-                            <div className="text-xs text-gray-500">Ejemplo: Alquiler Bs. 3,000 → IT Bs. 90</div>
-                        </div>
-                        <div className="p-6 bg-purple-50 rounded-2xl">
-                            <h3 className="font-bold text-gray-900 mb-2">📅 RC-IVA 12.5%</h3>
-                            <p className="text-sm text-gray-600 mb-3">Se paga en marzo, junio, septiembre y diciembre. Se puede compensar al 100%.</p>
-                            <div className="text-xs text-gray-500">Ejemplo: Trimestre Bs. 9,000 → RC-IVA Bs. 1,125</div>
-                        </div>
-                    </div>
-
-                    <EmptyState
-                        icon="📑"
-                        title="Calcula tus impuestos fácilmente"
-                        description="Ingresa el monto del alquiler y tus facturas para ver cuánto debes pagar realmente"
-                    />
-                </div>
-            );
-        }
-
-        function Ayuda() {
-            const topics = [
-                {
-                    icon: '🏢',
-                    title: '¿Cómo agregar una propiedad?',
-                    description: 'Te explicamos paso a paso cómo registrar tu primera casa o edificio'
-                },
-                {
-                    icon: '🏪',
-                    title: '¿Qué son las unidades?',
-                    description: 'Aprende a dividir tu propiedad en tiendas, departamentos u oficinas'
-                },
-                {
-                    icon: '👥',
-                    title: 'Gestionar inquilinos',
-                    description: 'Cómo registrar y administrar las personas que alquilan'
-                },
-                {
-                    icon: '💰',
-                    title: 'Sistema de pagos',
-                    description: 'Cómo funciona la distribución automática a copropietarios'
-                },
-                {
-                    icon: '📑',
-                    title: 'Impuestos bolivianos',
-                    description: 'Guía completa de IVA, IT y RC-IVA para alquileres'
-                },
-                {
-                    icon: '💸',
-                    title: 'Control de gastos',
-                    description: 'Cómo registrar impuestos, mantenimiento y mejoras'
+            const loadContratos = async () => {
+                try {
+                    const response = await fetchWithToken(`${API_URL}/contratos`);
+                    const data = await response.json();
+                    setContratos(Array.isArray(data) ? data : []);
+                } catch (error) {
+                    console.error('Error:', error);
+                } finally {
+                    setLoading(false);
                 }
-            ];
+            };
+
+            const loadPagos = async (contratoId) => {
+                try {
+                    const response = await fetchWithToken(`${API_URL}/pagos/contrato/${contratoId}`);
+                    const data = await response.json();
+                    setPagos(Array.isArray(data) ? data : []);
+                } catch (error) {
+                    console.error('Error:', error);
+                    setPagos([]);
+                }
+            };
+
+            const handleContratoChange = (e) => {
+                const contratoId = parseInt(e.target.value);
+                setContratoSeleccionado(contratoId);
+                if (contratoId) {
+                    loadPagos(contratoId);
+                } else {
+                    setPagos([]);
+                }
+            };
+
+            const handleRegistrarClick = (pago) => {
+                setPagoARegistrar(pago);
+                setShowModalRegistrar(true);
+            };
+
+            if (loading) {
+                return <div className="text-center py-20"><div className="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto"></div></div>;
+            }
 
             return (
                 <div className="glass-card rounded-3xl p-8 shadow-lg animate-slide-up">
-                    <div className="text-center mb-8">
-                        <div className="text-6xl mb-4">❓</div>
-                        <h2 className="text-3xl font-bold text-gray-900 mb-2">Centro de Ayuda</h2>
-                        <p className="text-lg text-gray-600">Guías y tutoriales para usar el sistema</p>
+                    <div className="flex items-center justify-between mb-6">
+                        <div>
+                            <h2 className="text-3xl font-bold text-gray-900 mb-2">💰 Gestión de Pagos</h2>
+                            <p className="text-gray-600">Registra y controla los pagos de alquiler</p>
+                        </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {topics.map((topic, idx) => (
-                            <button
-                                key={idx}
-                                className="p-6 bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all text-left group"
-                            >
-                                <div className="text-4xl mb-4">{topic.icon}</div>
-                                <h3 className="text-lg font-bold text-gray-900 mb-2 group-hover:text-purple-600 transition">
-                                    {topic.title}
-                                </h3>
-                                <p className="text-sm text-gray-600">{topic.description}</p>
-                            </button>
-                        ))}
+                    <div className="mb-6">
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">📄 Selecciona un Contrato</label>
+                        <div className="flex gap-4">
+                            <select value={contratoSeleccionado || ''} onChange={handleContratoChange} className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-xl">
+                                <option value="">-- Selecciona un contrato --</option>
+                                {contratos.map(c => (
+                                    <option key={c.id} value={c.id}>
+                                        Contrato #{c.numero_contrato} - Bs. {c.canon_mensual?.toLocaleString()}/mes
+                                    </option>
+                                ))}
+                            </select>
+                            {contratoSeleccionado && (
+                                <button onClick={() => setShowModalCrear(true)} className="btn-primary text-white font-semibold px-6 py-3 rounded-xl shadow-lg whitespace-nowrap">
+                                    ➕ Crear Pago Pendiente
+                                </button>
+                            )}
+                        </div>
                     </div>
 
-                    <div className="mt-8 p-6 bg-gradient-to-br from-purple-500 to-blue-500 rounded-2xl text-white">
-                        <h3 className="text-xl font-bold mb-2">¿Necesitas ayuda personalizada?</h3>
-                        <p className="mb-4">Contáctanos y te ayudamos a configurar tu sistema</p>
-                        <button className="px-6 py-3 bg-white text-purple-600 font-semibold rounded-xl hover:bg-gray-100 transition">
-                            Contactar Soporte
-                        </button>
+                    {!contratoSeleccionado ? (
+                        <EmptyState icon="💰" title="Selecciona un contrato" description="Elige un contrato para ver sus pagos" />
+                    ) : pagos.length === 0 ? (
+                        <EmptyState icon="💰" title="Sin pagos registrados" description="Crea el primer pago pendiente para este contrato" />
+                    ) : (
+                        <div className="space-y-4">
+                            {pagos.map((pago) => (
+                                <div key={pago.id} className="bg-white rounded-2xl p-6 shadow-lg">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex-1">
+                                            <h3 className="text-lg font-bold text-gray-900 mb-2">Periodo: {pago.periodo}</h3>
+                                            <p className="text-gray-600">Monto esperado: <span className="font-bold">Bs. {pago.monto_esperado?.toLocaleString()}</span></p>
+                                            <p className="text-gray-600">Monto pagado: <span className="font-bold text-green-600">Bs. {pago.monto_pagado?.toLocaleString()}</span></p>
+                                            <p className="text-gray-600">Fecha vencimiento: {pago.fecha_vencimiento}</p>
+                                            {pago.mora_calculada > 0 && (
+                                                <p className="text-red-600 font-semibold">Mora: Bs. {pago.mora_calculada?.toLocaleString()} ({pago.dias_atraso} días)</p>
+                                            )}
+                                        </div>
+                                        <div className="flex flex-col items-end gap-2">
+                                            <div className={`px-4 py-2 rounded-xl font-semibold ${
+                                                pago.estado === 'pagado' ? 'bg-green-100 text-green-700' :
+                                                pago.estado === 'parcial' ? 'bg-yellow-100 text-yellow-700' :
+                                                pago.estado === 'vencido' ? 'bg-red-100 text-red-700' :
+                                                'bg-gray-100 text-gray-700'
+                                            }`}>
+                                                {pago.estado === 'pagado' ? '✅ Pagado' :
+                                                 pago.estado === 'parcial' ? '⚠️ Parcial' :
+                                                 pago.estado === 'vencido' ? '❌ Vencido' :
+                                                 '⏳ Pendiente'}
+                                            </div>
+                                            {pago.estado !== 'pagado' && (
+                                                <button onClick={() => handleRegistrarClick(pago)} className="px-4 py-2 bg-blue-500 text-white font-semibold rounded-xl hover:bg-blue-600 transition">
+                                                    💵 Registrar Pago
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {showModalCrear && <CrearPagoModal contratoId={contratoSeleccionado} onClose={() => { setShowModalCrear(false); loadPagos(contratoSeleccionado); }} />}
+                    {showModalRegistrar && pagoARegistrar && <RegistrarPagoModal pago={pagoARegistrar} onClose={() => { setShowModalRegistrar(false); setPagoARegistrar(null); loadPagos(contratoSeleccionado); }} />}
+                </div>
+            );
+        }
+
+        function CrearPagoModal({ contratoId, onClose }) {
+            const [formData, setFormData] = useState({
+                periodo: new Date().toISOString().substring(0, 7),
+                fecha_vencimiento: '',
+                monto_esperado: ''
+            });
+            const [loading, setLoading] = useState(false);
+            const [error, setError] = useState('');
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                setError('');
+                setLoading(true);
+
+                try {
+                    const response = await fetchWithToken(`${API_URL}/pagos`, {
+                        method: 'POST',
+                        body: JSON.stringify({
+                            contrato_id: contratoId,
+                            periodo: formData.periodo,
+                            fecha_vencimiento: formData.fecha_vencimiento,
+                            monto_esperado: parseFloat(formData.monto_esperado)
+                        })
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.detail || 'Error al crear pago');
+                    }
+
+                    onClose();
+                } catch (err) {
+                    setError(err.message);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            return (
+                <div className="fixed inset-0 modal-overlay flex items-center justify-center z-50 p-4 animate-fade-in">
+                    <div className="glass-card rounded-3xl shadow-2xl p-8 w-full max-w-md animate-scale-in">
+                        <div className="flex items-center justify-between mb-6">
+                            <h2 className="text-2xl font-bold text-gray-900">💰 Crear Pago Pendiente</h2>
+                            <button onClick={onClose} className="text-gray-500 hover:text-gray-700 text-2xl">✕</button>
+                        </div>
+
+                        {error && <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">{error}</div>}
+
+                        <form onSubmit={handleSubmit} className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">📅 Periodo (YYYY-MM)</label>
+                                <input type="month" value={formData.periodo} onChange={(e) => setFormData({...formData, periodo: e.target.value})} className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl" required />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">📆 Fecha de Vencimiento</label>
+                                <input type="date" value={formData.fecha_vencimiento} onChange={(e) => setFormData({...formData, fecha_vencimiento: e.target.value})} className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl" required />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">💰 Monto Esperado (Bs.)</label>
+                                <input type="number" step="0.01" value={formData.monto_esperado} onChange={(e) => setFormData({...formData, monto_esperado: e.target.value})} className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl" required />
+                            </div>
+
+                            <div className="flex gap-4 pt-4">
+                                <button type="button" onClick={onClose} className="flex-1 px-6 py-3 border-2 border-gray-300 text-gray-700 font-semibold rounded-xl hover:bg-gray-50 transition">Cancelar</button>
+                                <button type="submit" disabled={loading} className="flex-1 btn-primary text-white font-semibold px-6 py-3 rounded-xl shadow-lg disabled:opacity-50">
+                                    {loading ? 'Creando...' : 'Crear Pago'}
+                                </button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             );
         }
 
-        // Componente de estado vacío
+        function RegistrarPagoModal({ pago, onClose }) {
+            const [formData, setFormData] = useState({
+                monto_pagado: pago.monto_esperado,
+                fecha_pago: new Date().toISOString().split('T')[0],
+                forma_pago: 'transferencia',
+                numero_comprobante: '',
+                nota: ''
+            });
+            const [loading, setLoading] = useState(false);
+            const [error, setError] = useState('');
+            const [resultado, setResultado] = useState(null);
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                setError('');
+                setLoading(true);
+
+                try {
+                    const response = await fetchWithToken(`${API_URL}/pagos/${pago.id}/registrar`, {
+                        method: 'POST',
+                        body: JSON.stringify({
+                            monto_pagado: parseFloat(formData.monto_pagado),
+                            fecha_pago: formData.fecha_pago,
+                            forma_pago: formData.forma_pago,
+                            numero_comprobante: formData.numero_comprobante || null,
+                            nota: formData.nota || null
+                        })
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.detail || 'Error al registrar pago');
+                    }
+
+                    const data = await response.json();
+                    setResultado(data);
+                } catch (err) {
+                    setError(err.message);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            if (resultado) {
+                return (
+                    <div className="fixed inset-0 modal-overlay flex items-center justify-center z-50 p-4 animate-fade-in">
+                        <div className="glass-card rounded-3xl shadow-2xl p-8 w-full max-w-md animate-scale-in">
+                            <div className="text-center mb-6">
+                                <div className="text-6xl mb-4">✅</div>
+                                <h2 className="text-2xl font-bold text-gray-900 mb-2">¡Pago Registrado!</h2>
+                                <p className="text-gray-600">El pago se ha procesado correctamente</p>
+                            </div>
+
+                            <div className="space-y-3 mb-6">
+                                <div className="p-4 bg-blue-50 rounded-xl">
+                                    <p className="text-sm text-gray-600">Periodo</p>
+                                    <p className="font-bold text-gray-900">{resultado.pago.periodo}</p>
+                                </div>
+                                <div className="p-4 bg-green-50 rounded-xl">
+                                    <p className="text-sm text-gray-600">Monto Pagado</p>
+                                    <p className="font-bold text-green-700">Bs. {resultado.pago.monto_pagado?.toLocaleString()}</p>
+                                </div>
+                                {resultado.mora && resultado.mora.mora_total > 0 && (
+                                    <div className="p-4 bg-red-50 rounded-xl">
+                                        <p className="text-sm text-gray-600">Mora Calculada</p>
+                                        <p className="font-bold text-red-700">Bs. {resultado.mora.mora_total?.toLocaleString()}</p>
+                                        <p className="text-xs text-gray-600">{resultado.mora.dias_atraso} días de atraso</p>
+                                    </div>
+                                )}
+                            </div>
+
+                            <button onClick={onClose} className="w-full btn-primary text-white font-semibold py-3 rounded-xl shadow-lg">
+                                Cerrar
+                            </button>
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="fixed inset-0 modal-overlay flex items-center justify-center z-50 p-4 animate-fade-in">
+                    <div className="glass-card rounded-3xl shadow-2xl p-8 w-full max-w-md animate-scale-in">
+                        <div className="flex items-center justify-between mb-6">
+                            <h2 className="text-2xl font-bold text-gray-900">💵 Registrar Pago</h2>
+                            <button onClick={onClose} className="text-gray-500 hover:text-gray-700 text-2xl">✕</button>
+                        </div>
+
+                        <div className="mb-6 p-4 bg-blue-50 rounded-xl">
+                            <p className="text-sm text-gray-600">Periodo: <span className="font-bold">{pago.periodo}</span></p>
+                            <p className="text-sm text-gray-600">Monto esperado: <span className="font-bold">Bs. {pago.monto_esperado?.toLocaleString()}</span></p>
+                        </div>
+
+                        {error && <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">{error}</div>}
+
+                        <form onSubmit={handleSubmit} className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">💰 Monto Pagado (Bs.)</label>
+                                <input type="number" step="0.01" value={formData.monto_pagado} onChange={(e) => setFormData({...formData, monto_pagado: e.target.value})} className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl" required />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">📅 Fecha de Pago</label>
+                                <input type="date" value={formData.fecha_pago} onChange={(e) => setFormData({...formData, fecha_pago: e.target.value})} className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl" required />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">💳 Forma de Pago</label>
+                                <select value={formData.forma_pago} onChange={(e) => setFormData({...formData, forma_pago: e.target.value})} className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl" required>
+                                    <option value="efectivo">💵 Efectivo</option>
+                                    <option value="transferencia">🏦 Transferencia</option>
+                                    <option value="deposito">🏧 Depósito</option>
+                                    <option value="cheque">📝 Cheque</option>
+                                    <option value="qr">📱 QR</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">🧾 Número de Comprobante (opcional)</label>
+                                <input type="text" value={formData.numero_comprobante} onChange={(e) => setFormData({...formData, numero_comprobante: e.target.value})} className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl" placeholder="12345" />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">📝 Nota (opcional)</label>
+                                <textarea value={formData.nota} onChange={(e) => setFormData({...formData, nota: e.target.value})} className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl" rows="2" placeholder="Observaciones adicionales"></textarea>
+                            </div>
+
+                            <div className="flex gap-4 pt-4">
+                                <button type="button" onClick={onClose} className="flex-1 px-6 py-3 border-2 border-gray-300 text-gray-700 font-semibold rounded-xl hover:bg-gray-50 transition">Cancelar</button>
+                                <button type="submit" disabled={loading} className="flex-1 btn-primary text-white font-semibold px-6 py-3 rounded-xl shadow-lg disabled:opacity-50">
+                                    {loading ? 'Registrando...' : 'Registrar Pago'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            );
+        }
+
         function EmptyState({ icon, title, description }) {
             return (
-                <div className="empty-state text-center py-16">
+                <div className="text-center py-16">
                     <div className="text-6xl mb-4">{icon}</div>
                     <h3 className="text-xl font-bold text-gray-900 mb-2">{title}</h3>
                     <p className="text-gray-600">{description}</p>
@@ -894,7 +1109,6 @@
             );
         }
 
-        // Renderizar la aplicación
         ReactDOM.render(<App />, document.getElementById('root'));
     </script>
 </body>

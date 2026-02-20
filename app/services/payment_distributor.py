@@ -61,7 +61,7 @@ class PaymentDistributor:
         propiedad = contrato.propiedad
         
         # Si no es copropiedad, no hay nada que distribuir
-        if propiedad.tipo != TipoPropiedad.COPROPIEDAD:
+        if propiedad.tipo != "copropiedad":
             return {
                 "tipo": "propiedad_propia",
                 "monto_total": pago.monto_pagado,

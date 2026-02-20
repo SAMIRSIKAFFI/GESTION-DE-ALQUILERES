@@ -56,8 +56,7 @@ def crear_pago(
     """Crear nuevo registro de pago (pendiente)"""
     # Verificar contrato
     contrato = db.query(Contrato).join(Propiedad).filter(
-        Contrato.id == pago_data.contrato_id,
-        Propiedad.empresa_id == current_user.empresa_id
+        Contrato.id == pago_data.contrato_id,  
     ).first()
     
     if not contrato:
@@ -98,7 +97,6 @@ def registrar_pago(
     # Obtener pago
     pago = db.query(Pago).join(Contrato).join(Propiedad).filter(
         Pago.id == pago_id,
-        Propiedad.empresa_id == current_user.empresa_id
     ).first()
     
     if not pago:
@@ -152,8 +150,7 @@ def listar_pagos_contrato(
     """Listar todos los pagos de un contrato"""
     # Verificar contrato
     contrato = db.query(Contrato).join(Propiedad).filter(
-        Contrato.id == contrato_id,
-        Propiedad.empresa_id == current_user.empresa_id
+        Contrato.id == contrato_id,  
     ).first()
     
     if not contrato:

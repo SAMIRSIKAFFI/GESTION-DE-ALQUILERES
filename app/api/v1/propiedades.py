@@ -1,190 +1,105 @@
-"""
-Endpoints de Propiedades
-"""
-
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
-from app.core.dependencies import get_db, get_current_active_user
+from pydantic import BaseModel
+from datetime import datetime
+
+from app.core.dependencies import get_db, get_current_user
 from app.models.user import User
 from app.models.propiedad import Propiedad
 from app.models.copropietario import Copropietario
-from app.schemas.propiedad import (
-    PropiedadCreate,
-    PropiedadResponse,
-    PropiedadListResponse,
-    PropiedadUpdate
-)
 
-router = APIRouter()
+router = APIRouter(prefix="/propiedades", tags=["Propiedades"])
 
+class CopropietarioCreate(BaseModel):
+    nombre_completo: str
+    ci: str
+    telefono: str
+    email: str = None
+    porcentaje_participacion: float
+    cuenta_bancaria: str
+    banco: str
+    tipo_cuenta: str = "ahorro"
 
-@router.post("/propiedades", response_model=PropiedadResponse, status_code=status.HTTP_201_CREATED)
-def crear_propiedad(
-    propiedad_data: PropiedadCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
-):
-    """
-    Crear una nueva propiedad con copropietarios (si aplica)
-    """
-    # Verificar que el usuario tenga una empresa asociada
-    if not current_user.empresa_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="El usuario debe estar asociado a una empresa"
-        )
+class PropiedadCreate(BaseModel):
+    direccion: str
+    ciudad: str
+    tipo: str
+    canon_base: float
+    superficie: float = None
+    dormitorios: int = None
+    banos: int = None
+    descripcion: str = None
+    # numero_copropietarios: int = 1
+    copropietarios: List[CopropietarioCreate] = []
+
+class PropiedadResponse(BaseModel):
+    id: int
+    direccion: str
+    ciudad: str
+    tipo: str
+    canon_base: float
+    estado: str
+    # numero_copropietarios: int    # Campo eliminado
+
+@router.post("/", response_model=PropiedadResponse, status_code=status.HTTP_201_CREATED)
+def crear_propiedad(propiedad: PropiedadCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    if propiedad.tipo == "copropiedad":
+        if not propiedad.copropietarios:
+            raise HTTPException(status_code=400, detail="Debe agregar al menos un copropietario")
+        total_porcentaje = sum(c.porcentaje_participacion for c in propiedad.copropietarios)
+        if abs(total_porcentaje - 100) > 0.01:
+            raise HTTPException(status_code=400, detail=f"Los porcentajes deben sumar 100%. Suman {total_porcentaje}%")
     
-    # Crear propiedad
     nueva_propiedad = Propiedad(
-        empresa_id=current_user.empresa_id,
-        direccion=propiedad_data.direccion,
-        ciudad=propiedad_data.ciudad,
-        departamento=propiedad_data.departamento,
-        zona=propiedad_data.zona,
-        tipo=propiedad_data.tipo,
-        tipo_inmueble=propiedad_data.tipo_inmueble,
-        superficie=propiedad_data.superficie,
-        dormitorios=propiedad_data.dormitorios,
-        banos=propiedad_data.banos,
-        descripcion=propiedad_data.descripcion,
-        canon_base=propiedad_data.canon_base,
-        moneda=propiedad_data.moneda
+        direccion=propiedad.direccion,
+        ciudad=propiedad.ciudad,
+        tipo=propiedad.tipo,
+        canon_base=propiedad.canon_base,
+        superficie=propiedad.superficie,
+        dormitorios=propiedad.dormitorios,
+        banos=propiedad.banos,
+        descripcion=propiedad.descripcion,
+        estado="disponible"
     )
-    
     db.add(nueva_propiedad)
-    db.flush()  # Para obtener el ID antes de commit
+    db.flush()
     
-    # Agregar copropietarios si existen
-    if propiedad_data.copropietarios:
-        for coprop_data in propiedad_data.copropietarios:
-            coprop = Copropietario(
-                propiedad_id=nueva_propiedad.id,
-                **coprop_data.dict()
-            )
-            db.add(coprop)
+    for coprop_data in propiedad.copropietarios:
+        copropietario = Copropietario(
+            propiedad_id=nueva_propiedad.id,
+            nombre_completo=coprop_data.nombre_completo,
+            ci=coprop_data.ci,
+            telefono=coprop_data.telefono,
+            email=coprop_data.email,
+            porcentaje_participacion=coprop_data.porcentaje_participacion,
+            cuenta_bancaria=coprop_data.cuenta_bancaria,
+            banco=coprop_data.banco,
+            tipo_cuenta=coprop_data.tipo_cuenta
+        )
+        db.add(copropietario)
     
     db.commit()
     db.refresh(nueva_propiedad)
-    
     return nueva_propiedad
 
+@router.get("/", response_model=List[PropiedadResponse])
+def listar_propiedades(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    propiedades = db.query(Propiedad).filter(Propiedad.deleted_at == None).offset(skip).limit(limit).all()
+    return propiedades
 
-@router.get("/propiedades", response_model=List[PropiedadListResponse])
-def listar_propiedades(
-    skip: int = 0,
-    limit: int = 100,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
-):
-    """
-    Listar todas las propiedades del usuario actual
-    """
-    propiedades = db.query(Propiedad).filter(
-        Propiedad.empresa_id == current_user.empresa_id,
-        Propiedad.deleted_at == None
-    ).offset(skip).limit(limit).all()
-    
-    # Agregar conteo de copropietarios
-    result = []
-    for prop in propiedades:
-        coprop_count = db.query(Copropietario).filter(
-            Copropietario.propiedad_id == prop.id,
-            Copropietario.deleted_at == None
-        ).count()
-        
-        result.append(PropiedadListResponse(
-            id=prop.id,
-            direccion=prop.direccion,
-            ciudad=prop.ciudad,
-            tipo=prop.tipo.value,
-            canon_base=prop.canon_base,
-            estado=prop.estado.value,
-            numero_copropietarios=coprop_count
-        ))
-    
-    return result
-
-
-@router.get("/propiedades/{propiedad_id}", response_model=PropiedadResponse)
-def obtener_propiedad(
-    propiedad_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
-):
-    """
-    Obtener detalles de una propiedad específica
-    """
-    propiedad = db.query(Propiedad).filter(
-        Propiedad.id == propiedad_id,
-        Propiedad.empresa_id == current_user.empresa_id,
-        Propiedad.deleted_at == None
-    ).first()
-    
+@router.get("/{propiedad_id}", response_model=PropiedadResponse)
+def obtener_propiedad(propiedad_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    propiedad = db.query(Propiedad).filter(Propiedad.id == propiedad_id, Propiedad.deleted_at == None).first()
     if not propiedad:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Propiedad no encontrada"
-        )
-    
+        raise HTTPException(status_code=404, detail="Propiedad no encontrada")
     return propiedad
 
-
-@router.put("/propiedades/{propiedad_id}", response_model=PropiedadResponse)
-def actualizar_propiedad(
-    propiedad_id: int,
-    propiedad_data: PropiedadUpdate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
-):
-    """
-    Actualizar una propiedad
-    """
-    propiedad = db.query(Propiedad).filter(
-        Propiedad.id == propiedad_id,
-        Propiedad.empresa_id == current_user.empresa_id,
-        Propiedad.deleted_at == None
-    ).first()
-    
+@router.delete("/{propiedad_id}", status_code=status.HTTP_204_NO_CONTENT)
+def eliminar_propiedad(propiedad_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    propiedad = db.query(Propiedad).filter(Propiedad.id == propiedad_id, Propiedad.deleted_at == None).first()
     if not propiedad:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Propiedad no encontrada"
-        )
-    
-    # Actualizar campos
-    for field, value in propiedad_data.dict(exclude_unset=True).items():
-        setattr(propiedad, field, value)
-    
+        raise HTTPException(status_code=404, detail="Propiedad no encontrada")
+    propiedad.deleted_at = datetime.utcnow()
     db.commit()
-    db.refresh(propiedad)
-    
-    return propiedad
-
-
-@router.delete("/propiedades/{propiedad_id}", status_code=status.HTTP_204_NO_CONTENT)
-def eliminar_propiedad(
-    propiedad_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
-):
-    """
-    Eliminar una propiedad (soft delete)
-    """
-    propiedad = db.query(Propiedad).filter(
-        Propiedad.id == propiedad_id,
-        Propiedad.empresa_id == current_user.empresa_id,
-        Propiedad.deleted_at == None
-    ).first()
-    
-    if not propiedad:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Propiedad no encontrada"
-        )
-    
-    # Soft delete
-    propiedad.soft_delete()
-    db.commit()
-    
     return None
